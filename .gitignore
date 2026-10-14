@@ -24,3 +24,6 @@ npm-debug.log*
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Claude Code runtime lock
+.claude/scheduled_tasks.lock
