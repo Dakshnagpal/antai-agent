@@ -17,3 +17,4 @@ Append only. This is the audit trail of the knowledge itself — distinct from `
 file last moved and which task moved it.
 
 - 2026-10-14 · `Meta/*`, root truth files · knowledge layer seeded: process docs and empty root templates · `n/a — scaffolding, precedes the first ledger entry`
+- 2026-10-14 · `Meta/task-ledger.md` · drift counts now surface at session start only; Stop drift-nudge hook removed · #001

@@ -124,8 +124,8 @@ What the ledger makes visible:
 | `Entry Kind → Inferred` | **Plan drift** | Reality required work the plan did not foresee |
 | `okf synced → false` | **Knowledge drift** | Code moved, the OKF did not follow |
 
-Neither is a failure. Both are debt, and both have to stay visible. Hooks surface the counts at
-session start and again when a turn ends — advisory only, they never block.
+Neither is a failure. Both are debt, and both have to stay visible. A hook surfaces the counts at
+session start — advisory only, it never blocks.
 
 ## Write discipline
 
