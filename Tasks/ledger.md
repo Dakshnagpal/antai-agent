@@ -28,7 +28,7 @@ the last ~30 into `Tasks/archive/ledger-YYYY-MM.md`.
                         ✓ drift-nudge.sh removed; no remaining references in repo
                         ✓ _count.sh kept; orient.sh still runs cleanly
                         ✓ task-ledger.md no longer claims counts show at turn end
-  commit              → pending
+  commit              → fd0165b
   task status         → Done
   reconciled status   → false
   okf synced          → true
