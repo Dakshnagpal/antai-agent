@@ -8,7 +8,8 @@
 | **Version** | 0.1 |
 | **Date** | 12 October 2026 |
 | **Author** | Daksh Nagpal |
-| **Based on** | BRD_1 v0.4, ARCHITECTURE_1 v0.1, DELIVERABLES_1 v0.2, deliverables 01, 02, 03, 04, 07, 08, 09, 10 and 11 (v0.1), drafts of deliverables 13 and 15, research notes A and F, ripgrep 14.1.1 help text |
+| **Based on** | BRD_1 v0.4, HLD.png, deliverables 00, 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 13, 14, 15 and 16 |
+| **How to use** | Reference design, not a fixed rail. Where the technology needs something different or extra, the implementation may change it; the change is then made in every deliverable it touches, so the set keeps agreeing. |
 
 ## Contents
 
@@ -57,16 +58,16 @@ antai has no HTTP API. Its "endpoints" are the command line (subcommands, flags,
 | Default `—` | No default: absent means "not set" |
 | `$ ` in examples | A shell prompt; `you › ` is antai's prompt (BRD 4.2) |
 | Tier names | `Safe`, `Normal`, `Dangerous`, `Hard floor` (BRD 5.5); "denied" means refused before any dialog |
-| Error codes | The `UPPER_SNAKE` codes of deliverable 11, section 11.2. Codes marked † are proposed here for that table (Q12-9). If deliverable 11 adopts its pending `<category>.<snake_case>` format (IC-D26), every code here maps mechanically: `TOOL_EDIT_NO_MATCH` becomes `tool.edit_no_match` |
-| Model-facing message IDs | `model.deny.*`, `model.err.*`, `model.result.*`, `model.trunc.*`, `model.int.*` of deliverable 08, section 8, which owns the wording. IDs marked † are proposed here for deliverable 08 |
+| Error codes | The `<category>.<snake_case>` codes of deliverable 11, section 11.2 (`tool.edit_no_match`), which owns them. Codes marked † are added by this document, in the same format, for that table |
+| Model-facing message IDs | `model.deny.*`, `model.err.*`, `model.result.*`, `model.trunc.*`, `model.int.*` of deliverable 08, section 8, which owns the wording. IDs marked † are added by this document for deliverable 08's catalogue |
 | SD references | Flows in deliverable 03 (for example SD-13a) |
-| Components | IDs of deliverable 01, section 5.9 (`CLI`, `SLASH`, `BT`, `MA`, …) |
+| Components | IDs of deliverable 01, section 5.9 (`CLI`, `SLASH`, `BT`, `MA`, …); deliverable 01, section 1.3 places each under its HLD.png box. `CLI` is not drawn in HLD.png: a command-line tool needs flags, stdin and exit codes before any box is wired |
 
 Paths in tool examples use `/` and are relative to the workspace root, the git root of the folder where antai starts, or that folder when there is no repository (BRD 5.4).
 
-### 1.4 Items pending BRD review used here
+### 1.4 Additions beyond BRD v0.4
 
-The BRD stays the baseline. Items below go beyond it or fill a gap, and the text marks them "(pending BRD review, ref)".
+These go beyond BRD v0.4. The design uses them as stated; the BRD can adopt them later. The text marks them "(beyond the BRD, ref)".
 
 | Ref | Item | BRD baseline | Section |
 |---|---|---|---|
@@ -80,7 +81,7 @@ The BRD stays the baseline. Items below go beyond it or fill a gap, and the text
 | REF-P8 | `/mcp <name>`, `/mcp login\|reconnect\|accept <name>`, `/effort` and `/resume` without an argument, `/history delete <number>` | BRD 5.11 gives the command names only | 5.3 |
 | REF-P9 | `find_files` cap of 200 paths; search line text cut at 500 characters; shared ignore, hidden-file and regular-expression rules for the three listing tools | FR-TOOL-05 says "Results capped" | 6 |
 | REF-P10 | Writes and edits are applied only if the file is still in the state the approval dialog showed | Not specified | 6.5, 6.6 |
-| Used from other deliverables | A-S6 (redact, then cap); IC-P1 to IC-P6 (deliverable 11); CR-13; EXT-D11, EXT-D14, Q10-4, Q10-11 (deliverable 10); SEC-D9, SEC-D19 (deliverable 02); P3, P6 (deliverable 04); PC-D17, PC-D23, Q08-1 (deliverable 08); OBS-P1 to OBS-P5 (deliverable 15 draft); Q13-1 (deliverable 13 draft) | | |
+| Used from other deliverables | Redact, then cap; IC-P1 to IC-P6 (deliverable 11); CR-13 (deliverable 00); EXT-D11, EXT-D14, the global `profile` default and `mcp.disabledServers` (deliverable 10); SEC-D9, SEC-D19 (deliverable 02; SEC-D19 is now in BRD v0.4, FR-CFG-05); P3, P6 (deliverable 04; now in BRD v0.4, FR-CFG-01 and FR-CFG-04); the small-window caps and the 20 % head, 80 % tail split (deliverable 08, sections 9.5 and 8.4); OBS-P1 to OBS-P5 (deliverable 15); the `--color` flags and `ui.*` keys (deliverable 13) | | |
 
 ### 1.5 REF-1a Command map: the command line
 
@@ -101,7 +102,7 @@ flowchart LR
         G["config<br/>CFG"]
         M["mcp list · add · remove<br/>mcp login · logout<br/>MCPM, MOA"]
     end
-    D["doctor · audit<br/>proposed, deliverable 15"]
+    D["doctor · audit<br/>beyond the BRD, deliverable 15"]
     H["--help · --version"]
     U --> A
     A --> I
@@ -167,6 +168,8 @@ flowchart LR
 
 Slash commands come only from typed input; text in tool output or files that looks like a command is never executed (FR-SLC-02, AC-10).
 
+In HLD.png terms (deliverable 01, section 1.3), `SLASH` and `SC` sit in Session, `POL` in Safety Guard and the tools in Tool Service. `POL` returns a decision and the agent loop then runs the approved call, so the policy stays a function without side effects that table tests can cover.
+
 ---
 
 ## 2. Invocation and global flags
@@ -176,14 +179,14 @@ Slash commands come only from typed input; text in tool output or files that loo
 | Form | What happens | Renderer, human present (deliverable 01, section 4.3) | Session `kind` | BRD | Flows |
 |---|---|---|---|---|---|
 | `antai` | Interactive session in the current folder | `INK` (`LINE` in P1 to P4), yes | `interactive` | FR-CLI-01 | SD-1a, SD-1b |
-| `antai "<prompt>"` | Interactive session; the prompt is sent as the first message (pending BRD review, REF-P1) | As above | `interactive` | FR-CLI-01 | SD-1a, SD-5a |
+| `antai "<prompt>"` | Interactive session; the prompt is sent as the first message (beyond the BRD, REF-P1) | As above | `interactive` | FR-CLI-01 | SD-1a, SD-5a |
 | `antai --continue`, `antai --resume <id>` | Resume a session, optionally with a first prompt | As above | as stored | FR-HIS-04 | SD-17a, SD-17b |
 | `antai run <prompt…>`, `antai -p <prompt…>` | One task, no prompts, then exit with a code from deliverable 11, section 12 | `PLAIN`, no | `run` | FR-CLI-02 | SD-13a, SD-13b |
 | `<cmd> \| antai run <prompt…>` | As above; stdin becomes a delimited untrusted-data block (section 3.2) | `PLAIN`, no | `run` | FR-CLI-03 | SD-13a |
 | `antai run … --json` | As above; stdout carries NDJSON (deliverable 11, section 5) | `PLAIN` NDJSON, no | `run` | FR-UI-06 | SD-13b |
-| `antai --json [prompt]` | Interactive session whose output is NDJSON; prompts are read from the terminal one line each; every approval is denied; slash-command output goes to stderr; ends at `/exit` or end of input (Q12-2) | `PLAIN` NDJSON, no | `interactive` | FR-UI-06 | SD-13b |
+| `antai --json [prompt]` | Interactive session whose output is NDJSON; prompts are read from the terminal one line each; every approval is denied; slash-command output goes to stderr; ends at `/exit` or end of input (REF-D28) | `PLAIN` NDJSON, no | `interactive` | FR-UI-06 | SD-13b |
 | `antai` with stdout not a terminal | Plain-text session as above | `PLAIN` text, no | `interactive` | FR-UI-06 | — |
-| `antai` with stdin not a terminal | Refused: exit 2, `USAGE_STDIN_NOT_TTY`, hint to use `antai run` | none | — | FR-UI-06 | — |
+| `antai` with stdin not a terminal | Refused: exit 2, `usage.stdin_not_tty`, hint to use `antai run` | none | — | FR-UI-06 | — |
 | `antai <subcommand> …` | Section 3 | `CLI` prints directly | none | FR-CLI-05, 06 | Section 3 |
 | `antai --help`, `antai --version` | Print and exit 0 | `CLI` | none | FR-CLI-04 | — |
 
@@ -203,7 +206,7 @@ flowchart TB
     SB -- "run" --> RUN["run: prompt required<br/>PLAIN, no human"]
     SB -- "other" --> SUBC["subcommand handler<br/>section 3"]
     SB -- "no" --> TT{"stdin a terminal?"}
-    TT -- "no" --> X2["exit 2, USAGE_STDIN_NOT_TTY<br/>hint: antai run"]
+    TT -- "no" --> X2["exit 2, usage.stdin_not_tty<br/>hint: antai run"]
     TT -- "yes" --> JS{"--json, or stdout<br/>not a terminal?"}
     JS -- "yes" --> PL["PLAIN session, no human"]
     JS -- "no" --> IK["INK or LINE session,<br/>human present"]
@@ -217,7 +220,7 @@ flowchart TB
     class A ext
 ```
 
-Subcommand names are `run`, `login`, `logout`, `init`, `config` and `mcp` (and `doctor`, `audit` if deliverable 15's proposals are adopted). A first positional word equal to one of them selects the subcommand. To send such a word as an interactive first prompt, put `--` before it: `antai -- config`. After `-p`, no word is treated as a subcommand: `antai -p config` sends "config" as the task.
+Subcommand names are `run`, `login`, `logout`, `init`, `config` and `mcp`, plus `doctor` and `audit`, which deliverable 15 adds beyond the BRD (OBS-P3, OBS-P4). A first positional word equal to one of them selects the subcommand. To send such a word as an interactive first prompt, put `--` before it: `antai -- config`. After `-p`, no word is treated as a subcommand: `antai -p config` sends "config" as the task.
 
 ### 2.2 Parsing rules
 
@@ -227,12 +230,12 @@ Subcommand names are `run`, `login`, `logout`, `init`, `config` and `mcp` (and `
 | Long values | `--model groq:openai/gpt-oss-20b` and `--model=groq:openai/gpt-oss-20b` are equivalent | Both forms are common in scripts |
 | Placement | Flags may appear before or after the subcommand and the prompt words: `git diff \| antai run "review" --json` (BRD 4.11) | Matches the BRD examples |
 | `--` | Ends flag parsing; everything after it is positional. In `antai mcp add` it separates the server command (section 3.8) | Prompts and commands that start with `-` |
-| Unknown flag | Exit 2, `USAGE_UNKNOWN_FLAG`, with the nearest valid flag as a suggestion ("Unknown flag --modle. Did you mean --model?") | NFR-USE-02 |
-| A single-value flag given twice | Exit 2, `USAGE_FLAG_CONFLICT` † | Two values for `--mode` in one command line is a mistake; guessing which one wins is worse for a safety setting |
-| Invalid value | Exit 2, `USAGE_INVALID_VALUE` naming the flag and the valid values (`--mode skip`, `--effort max`, a malformed `--model`) | FR-CFG-02 applies to files; the command line fails fast because the user is present to fix it |
-| Flag not valid for the subcommand | Exit 2, `USAGE_UNKNOWN_FLAG`: "--mode does not apply to antai mcp list" | A silently ignored flag misleads |
+| Unknown flag | Exit 2, `usage.unknown_flag`, with the nearest valid flag as a suggestion ("Unknown flag --modle. Did you mean --model?") | NFR-USE-02 |
+| A single-value flag given twice | Exit 2, `usage.flag_conflict` † | Two values for `--mode` in one command line is a mistake; guessing which one wins is worse for a safety setting |
+| Invalid value | Exit 2, `usage.invalid_value` naming the flag and the valid values (`--mode skip`, `--effort max`, a malformed `--model`) | FR-CFG-02 applies to files; the command line fails fast because the user is present to fix it |
+| Flag not valid for the subcommand | Exit 2, `usage.unknown_flag`: "--mode does not apply to antai mcp list" | A silently ignored flag misleads |
 | Prompt words | Positional words after `run`, `-p` or the interactive form are joined with single spaces: `antai run fix the tests` sends "fix the tests" | Unquoted prompts work; scripts should still quote |
-| `--help` and `--version` | Win over every other flag and are valid with any other argument; `--help` wins over `--version` | clig.dev convention (research A 3.4) |
+| `--help` and `--version` | Win over every other flag and are valid with any other argument; `--help` wins over `--version` | Help must stay reachable whatever else is on the line |
 
 ### 2.3 Global flags
 
@@ -253,19 +256,19 @@ Subcommand names are `run`, `login`, `logout`, `init`, `config` and `mcp` (and `
 | `--version` | — | — | — | — | — | everything | — | FR-CLI-04 |
 | `--help` | `-h` | — | — | — | — | everything; with a subcommand prints its help | — | FR-CLI-04, NFR-USE-03 |
 | `-p` | — | Alias of the `run` subcommand | — | — | — | top level | any other subcommand | FR-CLI-02 |
-| `--debug-content` | — | Proposed by deliverable 15 (OBS-P2): the debug log also records redacted prompts and model text for this run | off | — | — | `antai`, `run`; implies `--debug` | — | FR-ERR-03 |
-| `--color`, `--no-color` | — | Proposed by deliverable 13 (Q13-1); colour decision of section 9.5 | auto | `NO_COLOR`, `FORCE_COLOR` | `ui.*` (deliverable 13) | everything | each other | FR-UI-07 |
+| `--debug-content` | — | Beyond the BRD (deliverable 15, OBS-P2): the debug log also records redacted prompts and model text for this run | off | — | — | `antai`, `run`; implies `--debug` | — | FR-ERR-03 |
+| `--color`, `--no-color` | — | Beyond the BRD (deliverable 13); colour decision of section 9.5 | auto | `NO_COLOR`, `FORCE_COLOR` | `ui.*` (deliverable 13) | everything | each other | FR-UI-07 |
 
 Flag effects in detail:
 
 | Flag | Effect | Notes |
 |---|---|---|
 | `--continue` | Resumes the newest `interactive` session of the current project (matched by `gitRoot`, else `cwd`); `run` sessions are skipped. Nothing to continue: a new session starts with "No earlier session for this project; starting a new one." (SD-D21) | FR-HIS-01, 03, 04 |
-| `--resume <id>` | Resumes that session. Not found: exit 2 `USAGE_SESSION_NOT_FOUND`. Prefix matches several: exit 2 `USAGE_SESSION_AMBIGUOUS` † listing up to 5 IDs. Another project: exit 2 `USAGE_SESSION_OTHER_PROJECT` with its path. Held by another process: continues in a copy (FR-HIS-11). Written by a newer antai: exit 2 `STORAGE_SESSION_NEWER_FORMAT` | FR-HIS-04, 11 |
+| `--resume <id>` | Resumes that session. Not found: exit 2 `usage.session_not_found`. Prefix matches several: exit 2 `usage.session_ambiguous` † listing up to 5 IDs. Another project: exit 2 `usage.session_other_project` with its path. Held by another process: continues in a copy (FR-HIS-11). Written by a newer antai: exit 2 `storage.session_newer_format` | FR-HIS-04, 11 |
 | Restore on resume | Model, effort, profile and mode are restored from the session; flags given now win. `auto` is restored only when `--mode auto` is given again; skip never (FR-HIS-04, FR-MODE-02) | SD-17b |
-| `--model` | Invalid reference: exit 2 (`CONFIG_MODEL_INVALID`); a model known not to call tools: exit 2 (`CONFIG_MODEL_NO_TOOLS`); no key for its provider: interactive sessions prompt (SD-2a), `run` exits 2 (`CONFIG_API_KEY_MISSING`) naming the variable | FR-MOD-04, 05 |
-| `--profile` | Unknown or invalid name: interactive sessions start without a profile and show the error; `run` exits 2 (`USAGE_UNKNOWN_PROFILE` †) (deliverable 10, EXT-D14) | FR-PRF-01, 03 |
-| `--mode` | Sets the starting mode. Never `skip`: `--mode skip` is `USAGE_INVALID_VALUE` naming `--dangerously-skip-permissions` | FR-MODE-02 |
+| `--model` | Invalid reference: exit 2 (`model.invalid_reference`); a model known not to call tools: exit 2 (`model.tools_unsupported`); no key for its provider: interactive sessions prompt (SD-2a), `run` exits 2 (`provider.key_missing`) naming the variable | FR-MOD-04, 05 |
+| `--profile` | Unknown or invalid name: interactive sessions start without a profile and show the error; `run` exits 2 (`usage.profile_not_found`) (deliverable 10, EXT-D14) | FR-PRF-01, 03 |
+| `--mode` | Sets the starting mode. Never `skip`: `--mode skip` is `usage.invalid_value` naming `--dangerously-skip-permissions` | FR-MODE-02 |
 | `--json` | Selects `PLAIN` with NDJSON on stdout; the human-present flag is false, so every approval-needing call is denied (deliverable 01, section 4.3) | Section 9 |
 | `--no-history` | No session file, index entry or title call; the audit log is still written (FR-HIS-13); with `--continue` or `--resume` the old file is read but nothing is appended | FR-HIS-10, AC-31, AC-34 |
 | `--dangerously-skip-permissions` | Mode `skip` for this process: everything except the hard floor and secret paths runs without asking; a red banner shows for the whole session; never restored on resume; no environment variable or config key can set it | FR-MODE-02, AC-08 |
@@ -279,7 +282,7 @@ Values resolve in this order, highest first (FR-CFG-01; deliverable 11, IC-4):
 |---|---|---|---|
 | 1 | Command-line flags | `--mode research` | — |
 | 2 | `ANTAI_*` environment variables (section 4.2) | `ANTAI_MODEL=fast` | Only the listed variables; `ANTAI_MODE` cannot set `auto` (deliverable 02, SEC-D19) |
-| 3 | Active profile defaults | `mode: manual` in `PROFILE.md` | A project profile's `mode` and `model` apply only in trusted folders, `mode` only `research` or `manual` (FR-PRF-02) |
+| 3 | Active profile defaults | `mode: manual` in `PROFILE.md` | A project profile's `mode` and `model` apply only in trusted folders, `mode` only `research` or `manual` (FR-PRF-02); no profile sets `auto` (FR-CFG-05) |
 | 4 | Project config `<root>/.antai/config.json` | `"maxSteps": 40` | Filtered first: trust-gated keys only if trusted, global-only keys dropped, `auto` never (section 8.1) |
 | 5 | Global config `~/.antai/config.json` | `"model": "google:gemini-3.8-flash"` | — |
 | 6 | Built-in defaults | `maxSteps` 25 | — |
@@ -304,25 +307,25 @@ Safety and privacy keys never loosen across layers: list keys such as `shell.blo
 | `mcp remove` | Remove a server and its stored tokens | No | Refused | 0, 1, 2 | `CLI`, `FSX`, `CRED` | Should (FR-MCP-08) | — |
 | `mcp login <name>` | OAuth browser login for a remote server | Yes | Refused | 0, 1, 2, 3, 130 | `CLI`, `MCPM`, `MOA`, `OCB` | Must (FR-MCP-11) | SD-21a, SD-21b |
 | `mcp logout <name>` | Delete a server's OAuth tokens | No | Refused | 0, 1, 2 | `CLI`, `CRED` | Must (FR-MCP-11) | SD-21d |
-| `doctor`, `audit` | Proposed by deliverable 15 (OBS-P3, OBS-P4, OBS-P5); syntax owned there until adopted | — | — | — | `CLI` | — | — |
+| `doctor`, `audit` | Added by deliverable 15, beyond the BRD (OBS-P3, OBS-P4, OBS-P5); syntax, flags and exit codes are defined there | — | — | — | `CLI` | — | — |
 
-Every subcommand accepts `--help` and `--debug`, writes its messages to stderr and its result to stdout, exits 1 on an internal error with a crash report (FR-ERR-04), and never starts a model session. Subcommands that change a file or a credential write an audit record with `sessionId: null` (deliverable 04, section 5.13). A failed write of `credentials.json` or an MCP file is reported with its cause and exits 1 (Q12-9).
+Every subcommand accepts `--help` and `--debug`, writes its messages to stderr and its result to stdout, exits 1 on an internal error with a crash report (FR-ERR-04), and never starts a model session. Subcommands that change a file or a credential write an audit record with `sessionId: null` (deliverable 04, section 5.13). A failed write of `credentials.json` or an MCP file is reported with its cause and exits 1.
 
 ### 3.2 `antai run`
 
 | Item | Specification |
 |---|---|
 | Synopsis | `antai run [flags] [--] <prompt…>` or `antai -p [flags] [--] <prompt…>` |
-| Arguments | `<prompt…>`: the task, required, 1 to 100,000 characters after joining. Missing or blank: exit 2, `USAGE_PROMPT_MISSING` †, even when stdin is piped, because the instruction must come from the user and piped text is only data (pending BRD review, REF-P5) |
-| Flags | `--model`, `--profile`, `--mode`, `--effort`, `--json`, `--no-history`, `--dangerously-skip-permissions`, `--debug`, `--debug-content` (proposed). Refused: `--continue`, `--resume` (REF-P5) |
-| Mode | `--mode`, else `ANTAI_MODE`, else `research`. Config `mode` and a profile's `mode` do not apply (pending BRD review, REF-P4): nobody is present to approve, and a global `mode: auto` must not make every script run Normal commands unasked (D19, FR-CLI-02) |
+| Arguments | `<prompt…>`: the task, required, 1 to 100,000 characters after joining. Missing or blank: exit 2, `usage.prompt_missing` †, even when stdin is piped, because the instruction must come from the user and piped text is only data (beyond the BRD, REF-P5) |
+| Flags | `--model`, `--profile`, `--mode`, `--effort`, `--json`, `--no-history`, `--dangerously-skip-permissions`, `--debug`, `--debug-content` (beyond the BRD, OBS-P2). Refused: `--continue`, `--resume` (REF-P5) |
+| Mode | `--mode`, else `ANTAI_MODE`, else `research`. Config `mode` and a profile's `mode` do not apply (beyond the BRD, REF-P4): nobody is present to approve, and a global `mode: auto` must not make every script run Normal commands unasked (D19, FR-CLI-02) |
 | Renderer | `PLAIN`, human present false: every call that needs approval is denied with `model.deny.no-human` and reported (deliverable 11, section 5) |
 | Trust | Never asked. A stored "trusted" decision with a matching hash applies; otherwise the folder is untrusted and one stderr notice says so (deliverable 02, SEC-4) |
-| Workspace is the home folder or a drive root | Warning on stderr; continues in `research` or `manual`; exits 2 (`USAGE_HOME_WORKSPACE` †) in `auto` or skip (deliverable 02, SEC-D9) |
-| API key | Missing: exit 2, `CONFIG_API_KEY_MISSING`, naming the variable and `antai login <provider>`; never a prompt (FR-MOD-04, AC-01) |
+| Workspace is the home folder or a drive root | Warning on stderr; continues in `research` or `manual`; exits 2 (`usage.home_workspace` †) in `auto` or skip (deliverable 02, SEC-D9) |
+| API key | Missing: exit 2, `provider.key_missing`, naming the variable and `antai login <provider>`; never a prompt (FR-MOD-04, AC-01) |
 | MCP | Waits until every enabled server is connected, failed or needs login, each bounded by its `startupTimeoutMs`, before the first step; a server that needs login is skipped with "run `antai mcp login <name>`" on stderr (deliverable 10, EXT-D23; FR-MCP-11) |
-| Slash input | A prompt that starts with `/<skill-name>` expands that user-invocable skill (deliverable 10, EXT-D11). A built-in command (`antai run "/usage"`) or an unknown command exits 2 (`USAGE_UNKNOWN_COMMAND` †). Path-like first words and `//` follow section 5.1 |
-| Session | `kind: run`, skipped by `--continue`; title is the trimmed prompt, no model call (deliverable 03, Q03-4); audit records always (FR-HIS-13) |
+| Slash input | A prompt that starts with `/<skill-name>` expands that user-invocable skill (deliverable 10, EXT-D11). A built-in command (`antai run "/usage"`) or an unknown command exits 2 (`usage.unknown_command` †). Path-like first words and `//` follow section 5.1 |
+| Session | `kind: run`, skipped by `--continue`; title is the trimmed prompt, no model call (deliverable 03, SD-D11); audit records always (FR-HIS-13) |
 | Output | Text mode: section 9.2. `--json`: NDJSON, deliverable 11, section 5 |
 | Exit codes | 0 done; 1 internal error; 2 usage or config error; 3 provider error; 4 step cap; 5 an approvable call was denied (IC-P2); 129, 130, 143 signals (IC-P1); precedence in deliverable 11, section 12.2 |
 
@@ -331,7 +334,7 @@ Every subcommand accepts `--help` and `--debug`, writes its messages to stderr a
 | Rule | Value |
 |---|---|
 | When read | Only when stdin is not a terminal |
-| First-byte wait | If no byte and no end of input arrive within 10 seconds, antai continues without piped input and prints "No input on stdin after 10 s; continuing without it. Use </dev/null to skip the wait." This stops a CI runner's open, idle stdin from hanging the job (Q12-6) |
+| First-byte wait | If no byte and no end of input arrive within 10 seconds, antai continues without piped input and prints "No input on stdin after 10 s; continuing without it. Use </dev/null to skip the wait." This stops a CI runner's open, idle stdin from hanging the job (REF-D12) |
 | Cap | 100 KB (102,400 bytes), cut at a UTF-8 character boundary; the rest is not read and stdin is closed. Notice on stderr and the marker `model.trunc.piped-input` inside the block. On a small effective window the cap is lower (deliverable 08, section 9.5) |
 | Binary | A NUL byte in the first 8 KB: the block says `[binary input not included]` |
 | Encoding | UTF-8; a leading BOM is removed; invalid sequences become U+FFFD |
@@ -357,12 +360,12 @@ The third example lets Normal commands run unasked; the documentation warns agai
 | Synopsis | `antai login <provider>` |
 | Arguments | `<provider>`: a built-in provider (`groq`, `google`, `openai`, `anthropic`), a preset (`openrouter`, `together`, `fireworks`, `deepseek`, `mistral`, `xai`), or a custom provider defined in global config. A provider defined only in a project file is refused, because a repository must not choose where a stored key is sent (deliverable 09, section 7.4) |
 | Keyless providers | `ollama`, `lmstudio` and a custom provider without `apiKeyEnv`: prints "<provider> needs no API key." and exits 0 |
-| Terminal | stdin and stdout must be terminals. Otherwise exit 2, `USAGE_TTY_REQUIRED`, with "Set GROQ_API_KEY instead; it takes precedence over stored keys." (deliverable 03, SD-D14) |
+| Terminal | stdin and stdout must be terminals. Otherwise exit 2, `usage.tty_required`, with "Set GROQ_API_KEY instead; it takes precedence over stored keys." (deliverable 03, SD-D14) |
 | Prompt | `Paste your GROQ_API_KEY:` with masked echo; the key page URL is shown when known (deliverable 09, section 7.2). A key whose prefix does not match the provider asks "This does not look like a Groq key, which starts with gsk_. Save anyway?" (default No). Empty input, Esc or Ctrl+C cancels: exit 130 |
 | Storage | `providers.<name>.apiKey` and `savedAt` in `~/.antai/credentials.json`, `0600`, written under its lock; an existing key is replaced; the value is registered with `RED` at once (deliverable 04, section 5.5). No network call checks the key (deliverable 03, SD-D13) |
 | Output (stdout) | `Saved the groq key to ~/.antai/credentials.json (readable only by you).` When the provider's variable is also set: `GROQ_API_KEY is set in your environment and takes precedence over the saved key.` |
 | Audit | `credential` record, `action: key-saved`, `via: cli`, never a value |
-| Errors | Unknown provider: exit 2, `USAGE_UNKNOWN_PROVIDER` † listing valid names. Write failure: exit 1 with the cause (`STORAGE_CREDENTIALS_WRITE`) |
+| Errors | Unknown provider: exit 2, `model.unknown_provider` listing valid names. Write failure: exit 1 with the cause (`storage.credentials_write`) |
 
 ```text
 $ antai login groq
@@ -380,11 +383,11 @@ The Groq key page is the BRD's (BRD 4.1); the other providers' pages live in `pr
 |---|---|
 | Synopsis | `antai logout <provider>` |
 | Arguments | `<provider>`: any provider name that `login` accepts, or any name with a stored key |
-| Terminal | Not needed: removing a key cannot leak one (deliverable 11's subcommand table lists "no terminal" for `login` and `logout` together; this document applies it to `login` only) |
+| Terminal | Not needed: removing a key cannot leak one (REF-D10). Only `login` needs a terminal (deliverable 11, section 12.3) |
 | Behaviour | Removes `providers.<name>` from `credentials.json` under its lock. Environment variables are untouched |
 | Output | `Removed the saved groq key.`, plus the environment note of `login` when the variable is set. Nothing stored: `No saved key for groq.` (exit 0) |
 | Audit | `credential` record, `action: key-removed`, `via: cli` |
-| Errors | Unknown provider with nothing stored: exit 2, `USAGE_UNKNOWN_PROVIDER` †. Write failure: exit 1 |
+| Errors | Unknown provider with nothing stored: exit 2, `model.unknown_provider`. Write failure: exit 1 |
 
 ### 3.5 `antai config`
 
@@ -426,7 +429,7 @@ Ignored
 | Synopsis | `antai init` |
 | Behaviour | Creates `<root>/AGENT.md` with exclusive create (`wx`), so it never overwrites (FR-CLI-06). If any recognised instruction file (`AGENT.md`, `AGENTS.md`, `CLAUDE.md`, any letter case) already exists in the root, writes nothing and names that file, because a new `AGENT.md` would shadow it (deliverable 10, section 3.7). Creates no other file or folder |
 | Template | `# <folder name>` then three sections with one guidance line each: `## Project overview`, `## Commands` (build, test, lint), `## Conventions`. The exact text is starter content (DLV-SW-10) |
-| Home folder or drive root | Asks to confirm (default No) in a terminal; without a terminal exits 2 (`USAGE_HOME_WORKSPACE` †), with the hint that global instructions belong in `~/.antai/AGENT.md` |
+| Home folder or drive root | Asks to confirm (default No) in a terminal; without a terminal exits 2 (`usage.home_workspace` †), with the hint that global instructions belong in `~/.antai/AGENT.md` |
 | Output | `Created AGENT.md in /Users/me/shop-api. Describe the project there; antai reads it at the start of every session in this folder.` or `AGENTS.md already exists in /Users/me/shop-api; nothing was written.` |
 | Audit | `config-file` record, `action: init`, `file` |
 | Exit codes | 0 created or already present; 2 bad arguments or declined home-folder confirmation without a terminal; 1 write failure or internal error |
@@ -462,10 +465,10 @@ When stdout is not a terminal, the symbols are replaced by their ASCII fallbacks
 | `--project` | Write `<root>/.antai/mcp.json` (creating `.antai/`), never `.mcp.json`. Without it: `~/.antai/mcp.json` |
 | `--env KEY=VALUE` | Repeatable; stdio only. `KEY` matches `[A-Za-z_][A-Za-z0-9_]*`; `VALUE` may contain `${VAR}` or `${VAR:-default}` |
 | `--header "Name: value"` | Repeatable; HTTP only. Split at the first `:`; the name is an HTTP token; the value may contain `${VAR}`. `Content-Type`, `Accept`, `Host` and `Mcp-*` are refused (deliverable 10, EXT-D27) |
-| `--url <url>` | `https://`, or `http://` to a loopback host only (deliverable 10, XM-7); no `${…}` |
+| `--url <url>` | `https://`, or `http://` to a loopback host only (FR-MCP-01; deliverable 10, XM-7); no `${…}` |
 | `-- <command> [args…]` | Everything after `--`; no `${…}` in the command or arguments (deliverable 10, XM-31: pass values through `--env`) |
-| Validation | Exactly one of `--url` and `--`; `--env` only with `--`; `--header` only with `--url`. Any failure: exit 2 (`USAGE_INVALID_VALUE`) naming the rule |
-| Existing name | In the target file: exit 2 (`USAGE_SERVER_EXISTS` †). In another file: allowed, with "This overrides github in ~/.antai/mcp.json." or "github in .antai/mcp.json overrides this entry in this workspace." |
+| Validation | Exactly one of `--url` and `--`; `--env` only with `--`; `--header` only with `--url`. Any failure: exit 2 (`usage.invalid_value`) naming the rule |
+| Existing name | In the target file: exit 2 (`usage.server_exists` †). In another file: allowed, with "This overrides github in ~/.antai/mcp.json." or "github in .antai/mcp.json overrides this entry in this workspace." |
 | Literal tokens | A `--header` or `--env` value with no `${` whose name looks secret (`Authorization`, `*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`) or that matches a known credential format gets warning XM-29 with the `${VAR}` alternative (FR-MCP-08). In a terminal antai then asks "Store the literal value anyway?" (default No; No writes nothing and exits 0). Without a terminal the entry is written with the warning on stderr |
 | Write | Comment-preserving JSONC edit, atomic replace, file `0600`; the global file's previous version is kept as `mcp.json.bak` (deliverable 04, section 5.4) |
 | Trust | With `--project` in a trusted workspace, the stored trust hash is updated only if nothing else changed since the user trusted the folder (deliverable 10, EXT-D28); otherwise the next start asks again |
@@ -475,7 +478,7 @@ When stdout is not a terminal, the symbols are replaced by their ASCII fallbacks
 
 ```text
 $ antai mcp add db --project --env 'DATABASE_URL=${DATABASE_URL}' -- npx -y @example/postgres-mcp@1.4.2
-$ antai mcp add github --url https://api.githubcopilot.com/mcp/ --header 'Authorization: Bearer ${GITHUB_TOKEN}'
+$ antai mcp add github --url https://mcp.example.com/github/ --header 'Authorization: Bearer ${GITHUB_TOKEN}'
 ```
 
 Single quotes keep the shell from expanding `${…}`, so the file stores the reference, not the token.
@@ -486,7 +489,7 @@ Single quotes keep the shell from expanding `${…}`, so the file stores the ref
 |---|---|
 | Synopsis | `antai mcp remove <name> [--project]` |
 | Behaviour | Removes the entry from the global file, or from `.antai/mcp.json` with `--project`, with the same edit and backup rules as `add`. Then deletes the server's OAuth token set (keyed by its canonical URL), its client registration when no other configured server uses that issuer, and its drift baseline when no other server shares its identity (deliverable 04, sections 5.5 and 5.14) |
-| Not in the target file | Present only in `.mcp.json`: exit 2 with "antai does not edit .mcp.json; remove the entry there." Present in the other antai file: exit 2, `USAGE_UNKNOWN_SERVER`, with the hint to add or drop `--project`. Nowhere: exit 2, `USAGE_UNKNOWN_SERVER` |
+| Not in the target file | Present only in `.mcp.json`: exit 2 with "antai does not edit .mcp.json; remove the entry there." Present in the other antai file: exit 2, `usage.unknown_server`, with the hint to add or drop `--project`. Nowhere: exit 2, `usage.unknown_server` |
 | Output | `Removed "linear" from ~/.antai/mcp.json and deleted its saved login.` |
 | Audit | `config-file` record (`action: mcp-remove`); `credential` record when tokens were deleted |
 | Exit codes | 0 removed; 2 unknown name; 1 write failure or internal error |
@@ -496,12 +499,12 @@ Single quotes keep the shell from expanding `${…}`, so the file stores the ref
 | Item | Specification |
 |---|---|
 | Synopsis | `antai mcp login <name>` |
-| Who | A human at a terminal (`USAGE_TTY_REQUIRED` otherwise), for an HTTP server from the global file or a trusted project (`OAUTH_NOT_TRUSTED`, exit 2, for an untrusted project server), without a configured `Authorization` header (deliverable 03, SD-D16). A stdio server or a server with that header: exit 2 (`USAGE_INVALID_VALUE`) explaining that it takes its credentials from its configuration |
+| Who | A human at a terminal (`usage.tty_required` otherwise), for an HTTP server from the global file or a trusted project (`oauth.not_trusted`, exit 2, for an untrusted project server), without a configured `Authorization` header (deliverable 03, SD-D16). A stdio server or a server with that header: exit 2 (`usage.invalid_value`) explaining that it takes its credentials from its configuration |
 | Flow | Deliverable 03, SD-21a and SD-21b: discovery, client registration or `oauth.clientId`, loopback listener, browser, callback checks, token exchange. Repeating the command replaces an existing login (FR-MCP-11) |
 | Screen | Prints the authorization-server host and the authorization URL, opens the browser when it can, and waits up to 5 minutes with a countdown; Esc or Ctrl+C cancels. Over SSH the URL is printed with the explanation that browser login needs a browser on the same computer (FR-MCP-11; deliverable 13, UI-24) |
 | After the callback | Stores the tokens (`0600`), connects once to list the tools, closes, and prints `linear: logged in. 12 tools available.` |
 | Audit | `credential` record, `action: oauth-login`, `server`, `issuer`, `via: cli` |
-| Exit codes | 0 logged in; 2 unknown server (`USAGE_UNKNOWN_SERVER`), not trusted, no client ID (`OAUTH_CLIENT_ID_REQUIRED`), no terminal; 3 authorization or MCP server failure (`OAUTH_NO_METADATA`, `OAUTH_CALLBACK_REJECTED`, `OAUTH_TIMEOUT`, `MCP_START_FAILED`; IC-P4); 130 cancelled (`OAUTH_CANCELLED`) |
+| Exit codes | 0 logged in; 2 unknown server (`usage.unknown_server`), not trusted, no client ID (`oauth.client_id_required`), no terminal; 3 authorization or MCP server failure (`oauth.no_metadata`, `oauth.callback_rejected`, `oauth.timeout`, `mcp.start_failed`; IC-P4); 130 cancelled (`oauth.cancelled`) |
 
 ### 3.11 `antai mcp logout`
 
@@ -518,7 +521,7 @@ Single quotes keep the shell from expanding `${…}`, so the file stores the ref
 | Item | `--version` | `--help`, `-h` |
 |---|---|---|
 | Output | One line on stdout: `antai 1.0.0` (the package version, nothing else, so scripts can compare it) | Help text on stdout, wrapped to the terminal width (80 columns when not a terminal) |
-| Content | — | Usage line, then examples first (clig.dev, research A 3.4), commands, flags with defaults, environment variables, exit codes, and where the reference lives. `antai <subcommand> --help` shows that subcommand's synopsis, arguments, flags, examples and exit codes |
+| Content | — | Usage line, then examples first (most readers look for one), commands, flags with defaults, environment variables, exit codes, and where the reference lives. `antai <subcommand> --help` shows that subcommand's synopsis, arguments, flags, examples and exit codes |
 | Source | `package.json` version compiled into the bundle | The same command registry that builds `/help` (deliverable 13, UI-28), and a test checks that every flag, subcommand and slash command appears (NFR-USE-03, DLV-DOC-03) |
 | Exit code | 0 | 0 |
 
@@ -530,31 +533,31 @@ Single quotes keep the shell from expanding `${…}`, so the file stores the ref
 
 - antai reads only the variables listed in this section. Configuration keys have no automatic `ANTAI_*` mapping, so an inherited variable cannot set an arbitrary safety key (deliverable 11, IC-D17).
 - An empty value counts as unset. An invalid value produces a warning naming the variable and the valid values; the value is ignored and the next layer applies (FR-CFG-02). `ANTAI_MODE=auto` is refused the same way (deliverable 02, SEC-D19).
-- No variable can enable `--dangerously-skip-permissions`, set `auto`, mark a folder trusted, or move `~/.antai` (deliverable 04, Q04-12).
+- No variable can enable `--dangerously-skip-permissions`, set `auto`, mark a folder trusted, or move `~/.antai` (deliverable 04, section 2.1).
 - `ANTAI_*` variables are removed from every child environment (section 4.5).
 
-### 4.2 `ANTAI_*` variables (pending BRD review, REF-P3)
+### 4.2 `ANTAI_*` variables (beyond the BRD, REF-P3)
 
 | Variable | Sets | Values | Same as | Notes |
 |---|---|---|---|---|
 | `ANTAI_MODEL` | Starting model | `provider:model`, alias or provider name | `--model`, `model` | Resolved as in deliverable 09, section 2.3 |
-| `ANTAI_MODE` | Starting mode | `research`, `manual` | `--mode`, `mode` | `auto` refused (SEC-D19); also applies to `antai run` (REF-P4) |
+| `ANTAI_MODE` | Starting mode | `research`, `manual` | `--mode`, `mode` | `auto` refused (FR-CFG-05, SEC-D19); also applies to `antai run` (REF-P4) |
 | `ANTAI_EFFORT` | Reasoning effort | `provider-default`, `none`, `low`, `medium`, `high` | `--effort`, `effort` | FR-MOD-06 |
 | `ANTAI_MAX_STEPS` | Step cap | integer 1 to 100; larger values are clamped to 100 | `maxSteps` | FR-AGT-02 |
 | `ANTAI_NO_HISTORY` | No session file for this process | `1` or `true` | `--no-history`, `history.enabled: false` | The audit log is still written (FR-HIS-13) |
-| `ANTAI_DEBUG` | Debug log | `1`, or a comma list of categories (`provider`, `mcp`, `oauth`, `tool`, `history`, `config`, `ui`) | `--debug` | Proposed by deliverable 15 (OBS-P1); categories from deliverable 04, section 5.15 |
+| `ANTAI_DEBUG` | Debug log | `1` or `true`, or a comma list of categories (`provider`, `mcp`, `oauth`, `tool`, `history`, `config`, `ui`, `session`, `safety`, `process`, `perf`) | `--debug` | Beyond the BRD (deliverable 15, OBS-P1); categories from deliverable 15, section 3.2 (OBS-D4) |
 | `ANTAI_GIT_BASH_PATH` | Windows: path to Git Bash `bash.exe` | Absolute path | `shell.gitBashPath` | BRD FR-SH-11. An invalid path gives a warning and auto-detection (AC-24); ignored on macOS and Linux |
 
 Why these and no more: each mirrors a launch flag or the BRD's Git Bash override, so CI jobs can set them once per pipeline. Provider base URLs have no variable or flag in v1; they come from global config or a trusted project (FR-MOD-07 allows these sources; deliverable 09, section 3.4).
 
 ### 4.3 Provider key variables
 
-Read in the order of FR-MOD-04: the variable, then `credentials.json`, then (interactive only) a prompt. The value is passed to the provider factory and never copied into `process.env` (A-S5; deliverable 09, section 7.3).
+Read in the order of FR-MOD-04: the variable, then `credentials.json`, then (interactive only) a prompt. The value is passed to the provider factory and never copied into `process.env` (deliverable 09, section 7.3).
 
 | Provider | Variable | Key needed |
 |---|---|---|
 | `groq` | `GROQ_API_KEY` | Yes |
-| `google` | `GOOGLE_GENERATIVE_AI_API_KEY` (`GEMINI_API_KEY` is not read, deliverable 09, Q09-8) | Yes |
+| `google` | `GOOGLE_GENERATIVE_AI_API_KEY` (`GEMINI_API_KEY` is not read: the BRD names one variable; deliverable 09, section 7.2) | Yes |
 | `openai` | `OPENAI_API_KEY` | Yes |
 | `anthropic` | `ANTHROPIC_API_KEY` | Yes |
 | `openrouter`, `together`, `fireworks`, `deepseek`, `mistral`, `xai` | `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `FIREWORKS_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `XAI_API_KEY` (FR-MOD-08) | Yes |
@@ -565,12 +568,12 @@ Read in the order of FR-MOD-04: the variable, then `credentials.json`, then (int
 
 | Variable | Read by | Effect |
 |---|---|---|
-| `NO_COLOR` | `INK`, `LINE`, `PLAIN` | Present and not empty: no ANSI colour (no-color.org). antai applies it itself, because `supports-color` 11 and chalk 6 do not check it (research F 3.1) |
+| `NO_COLOR` | `INK`, `LINE`, `PLAIN` | Present and not empty: no ANSI colour. antai applies it itself, because `supports-color` 11 and chalk 6 do not check it |
 | `FORCE_COLOR` | Same | Forces colour, also when stdout is not a terminal; order of the colour decision in section 9.5 |
-| `TERM` | Node's colour detection | `TERM=dumb` means no colour (research F 3.1) |
+| `TERM` | Node's colour detection | `TERM=dumb` means no colour |
 | `HOME` (POSIX), `USERPROFILE` (Windows) | `PLAT` through `os.homedir()` | Location of `~/.antai`; on Windows `HOME` is ignored (deliverable 04, section 2.1) |
 | `PATH`, `PATHEXT` (Windows) | `GBL`, `SRCH`, `MCPM` | Finding `bash.exe`, `rg` and stdio MCP commands; entries inside the workspace and WSL's `System32\bash.exe` are skipped (FR-SH-11; deliverable 07, RT-D7) |
-| `INK_SCREEN_READER` | Ink | `true` turns on Ink's screen-reader output (research F 3.4); deliverable 13 owns antai's accessibility settings |
+| `INK_SCREEN_READER` | Ink | `true` turns on Ink's screen-reader output; deliverable 13 owns antai's accessibility settings |
 | Secret-named variables (`*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_PASS`, `*_PWD`, `*_CREDENTIALS`, `DATABASE_URL`) | `RED` | Their values are masked in all output (FR-SEC-03 b) |
 | `${VAR}` names in MCP files | `MCPM` | Substituted into `env` and `headers` values at start (FR-MCP-03) |
 | `RIPGREP_CONFIG_PATH` | — | Neutralised: `rg` always runs with `--no-config` (section 6.8) |
@@ -583,8 +586,8 @@ Applies to `shell` commands and stdio MCP servers (deliverable 07, section 7.3; 
 |---|---|---|
 | `PAGER=cat`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0` | Set | Nothing waits for input (FR-SH-06) |
 | `ANTAI_*` | Removed | antai's own settings are not command input |
-| Keys from `credentials.json`, OAuth tokens | Never present | They are never in `process.env` (A-S5) |
-| Provider key variables the user exported | Kept; printed values are masked | The user's own environment (deliverable 01, Q01-5, default) |
+| Keys from `credentials.json`, OAuth tokens | Never present | They are never in `process.env`, so no child inherits them |
+| Provider key variables the user exported | Kept; printed values are masked | The user's own environment (deliverable 01, section 10.6) |
 | An MCP entry's `env` values | Added for that server only, after substitution, registered with `RED` | FR-MCP-03 |
 
 ### 4.6 What project files can reference
@@ -645,7 +648,7 @@ flowchart TB
 
 ### 5.2 Summary
 
-IDs `FR-SLC-03` to `FR-SLC-19` are proposed so each BRD 5.11 row can be traced (pending BRD review, REF-P7, register CR-13).
+IDs `FR-SLC-03` to `FR-SLC-19` are added so each BRD 5.11 row can be traced (beyond the BRD, REF-P7, register CR-13).
 
 | Command | Proposed ID | Arguments | Priority | Owner | Flows |
 |---|---|---|---|---|---|
@@ -688,7 +691,7 @@ Output of every built-in command is a `command-result` event (deliverable 11, se
 | Behaviour | Without an argument: a picker in the order of deliverable 09, section 4.4 (current, default, aliases, models of providers usable now, configured models; `<preset>:` free text). With one: the checks of deliverable 09, section 11.1 in order (resolve; key or key prompt; effective effort; context size warning; data-use notice). The switch applies from the next turn; the conversation is kept (FR-MOD-05) |
 | Output | `model → google:gemini-3.8-flash (applies from your next message)`, plus any effort, context or data-use lines |
 | State, records | Session model; setting event `model` |
-| Errors | `CONFIG_MODEL_INVALID` or `CONFIG_MODEL_NO_TOOLS`: message, model unchanged. Key prompt cancelled: model unchanged |
+| Errors | `model.invalid_reference` or `model.tools_unsupported`: message, model unchanged. Key prompt cancelled: model unchanged |
 
 #### `/effort`
 
@@ -704,7 +707,7 @@ Output of every built-in command is a `command-result` event (deliverable 11, se
 | Item | Specification |
 |---|---|
 | Arguments | `[research\|manual\|auto]` |
-| Behaviour | Without an argument: the current mode as the focused row of a picker (BRD 5.11). With one: sets it from the next turn. A session launched with `--dangerously-skip-permissions` can leave skip with `/mode`, which only tightens, and the red banner goes; nothing can re-enter skip (FR-MODE-02) |
+| Behaviour | Without an argument: the current mode as the focused row of a picker (BRD 5.11). With one: sets it from the next turn. A session launched with `--dangerously-skip-permissions` can leave skip with `/mode`, which only tightens; the red banner stays for the whole session, and nothing can re-enter skip (FR-MODE-02; deliverable 06, UML-D20) |
 | Output | `mode → research (read-only: no writes, no state-changing commands)` (BRD 4.7) |
 | State, records | Session mode; setting event `mode` |
 | Errors | `skip` or any other value: "Unknown mode "skip". Use research, manual or auto. --dangerously-skip-permissions works only as a launch flag." (AC-08) |
@@ -733,14 +736,14 @@ Output of every built-in command is a `command-result` event (deliverable 11, se
 | Arguments | none, `<name>`, `login <name>`, `reconnect <name>`, `accept <name>` (REF-P8; the Ink UI offers the same actions as picker rows, deliverable 13, UI-24) |
 | Behaviour | No argument: every server with transport, status and tool counts (deliverable 10, section 6.8). `<name>`: details (source file, overrides, protocol version, tools with exposed names and tiers, token estimate, stderr tail, OAuth state without tokens, drift diff). `login`: as `antai mcp login` inside the session (human present, trust rules of section 3.10); tools join from the next turn. `reconnect`: closes and reconnects one server. `accept`: replaces the drift baseline of that server (deliverable 04, section 5.14; SD-D18) |
 | State, records | Server state; `login` writes a `credential` audit record; `accept` updates `mcp-fingerprints.json` |
-| Errors | Unknown server: message with the configured names. Login errors: the `OAUTH_*` texts of deliverable 11, section 11.2; the server stays `needs login` |
+| Errors | Unknown server: message with the configured names. Login errors: the `oauth.*` texts of deliverable 11, section 11.2; the server stays `needs login` |
 
 #### `/history`
 
 | Item | Specification |
 |---|---|
 | Arguments | none, `--all`, or `delete <id\|number>` |
-| Behaviour | Lists the current project's sessions newest first: number, title, last activity, turns, tokens; `run` sessions marked; `--all` adds the project path (FR-HIS-05). Opens in under 200 ms with 1,000 sessions (NFR-PERF-03) and reconciles the index (FR-HIS-08, SD-18b). Numbers refer to the last list shown and are what `/resume <number>` uses. `delete`: deletes one session file and its index entry; refused for the current session and for one held by a live process (FR-HIS-12; deliverable 04, section 8.3). No confirmation: the user typed the ID or number from the list just shown (Q12-11) |
+| Behaviour | Lists the current project's sessions newest first: number, title, last activity, turns, tokens; `run` sessions marked; `--all` adds the project path (FR-HIS-05). Opens in under 200 ms with 1,000 sessions (NFR-PERF-03) and reconciles the index (FR-HIS-08, SD-18b). Numbers refer to the last list shown and are what `/resume <number>` uses. `delete`: deletes one session file and its index entry; refused for the current session and for one held by a live process (FR-HIS-12; deliverable 04, section 8.3). No confirmation: the user typed the ID or number from the list just shown |
 | Output | Table ending with `/resume <number> to open one` (BRD 4.9); for `delete`: `Deleted "Fix failing auth test" (2026-10-12_1432_a1b2c3). Its audit records are kept.` |
 | State, records | `delete`: `history-delete` audit record |
 | Errors | Unknown ID or number; current session; held by another process |
@@ -750,10 +753,10 @@ Output of every built-in command is a `command-result` event (deliverable 11, se
 | Item | Specification |
 |---|---|
 | Arguments | `<id\|number>`: a session ID, a unique prefix of at least 8 characters, or a number from the last `/history` list. Without an argument it shows `/history` (REF-P8) |
-| Behaviour | Ends the current session (`end` event, reason `resume`, pending deliverable 06 Q06-2), then resumes the chosen one as `--resume` does: messages, model, effort and profile restored; mode restored unless it was `auto` or skip, which fall back to the configured default (FR-HIS-04). Another project: refused with its path. Held by another process: continues in a copy (FR-HIS-11) |
+| Behaviour | Ends the current session (`end` event, reason `resume`; deliverable 06, section 7.1), then resumes the chosen one as `--resume` does: messages, model, effort and profile restored; mode restored unless it was `auto` or skip, which fall back to the configured default (FR-HIS-04). Another project: refused with its path. Held by another process: continues in a copy (FR-HIS-11) |
 | Output | The `Resuming "<title>" (<date>, <n> turns)` line and the notices of deliverable 13, UI-25 |
 | State, records | New active session; `resume` and `repair` events in it (deliverable 04, section 5.9) |
-| Errors | `USAGE_SESSION_NOT_FOUND`, `USAGE_SESSION_OTHER_PROJECT`, `STORAGE_SESSION_NEWER_FORMAT` texts; the current session continues |
+| Errors | `usage.session_not_found`, `usage.session_other_project`, `storage.session_newer_format` texts; the current session continues |
 
 #### `/clear`
 
@@ -840,10 +843,10 @@ Deliverable 13, UI-29 draws the menu; this is its data contract.
 |---|---|---|
 | Interface | Each tool implements `AntaiTool` (deliverable 11, section 6.1); `TREG` wraps `execute` | Deliverable 11 |
 | Schema | Zod is the source; the JSON Schema below is what the provider receives. `additionalProperties: false`; parameter names are `snake_case` (deliverable 08, section 7.1). Parameter names and descriptions follow deliverable 08's proposals, which this document pins; `search_files` adds `ignore_case` | Deliverable 08, 7.2 |
-| Descriptions | Tool and parameter descriptions are deliverable 08's text (at most 50 words per tool, 12 per parameter, no dynamic values); the strings in the schemas below are drafts kept consistent with it | Deliverable 08, 7.1, PC-D10 |
-| Invalid input | Input that fails the schema is refused by `POL` before any dialog; the model receives `model.err.invalid-input` (`TOOL_INVALID_INPUT`) naming the field | Deliverable 11, section 7.1 |
-| Result | The model receives one text: a header line, the body, and a marker when cut. The card and records get the `ToolResult` envelope (`status`, `output`, `truncated`, `omittedChars`, `redactions`, `exitCode`, `durationMs`, `errorCode`) | Deliverable 11, section 6.2 |
-| Redaction and caps | Output is redacted first, then capped (A-S6). Each tool's cap is below; when the effective window is 16,000 tokens or less, deliverable 08's small-window caps apply instead (pending BRD review, PC-D17, Q08-1) | FR-SH-08, FR-SEC-03 |
+| Descriptions | Tool and parameter descriptions are deliverable 08's text (at most 50 words per tool, 12 per parameter, no dynamic values); the strings in the schemas below are drafts kept consistent with it | Deliverable 08, 7.1 |
+| Invalid input | Input that fails the schema is refused by `POL` before any dialog; the model receives `model.err.invalid-input` (`tool.invalid_input`) naming the field | Deliverable 11, section 7.1 |
+| Result | The model receives one text: a header line, the body, and a marker when cut. The card and records get the `ToolResult` envelope (`status`, `output`, `truncated`, `omittedChars`, `redactions`, `exitCode`, `durationMs`, `errorCode`, `resultSummary`) | Deliverable 11, section 6.2 |
+| Redaction and caps | Output is redacted first, then capped. Each tool's cap is below; when the effective window is 16,000 tokens or less, deliverable 08's small-window caps apply instead (beyond the BRD, deliverable 08, section 9.5) | FR-SH-08, FR-SEC-03 |
 | Failures | A tool fails by throwing a `tool`-category `AntaiError`; the model gets the `model.err.*` text as a tool error and the turn continues | FR-AGT-07 |
 | Denials | Refused calls reach the model as `execution-denied` with a `model.deny.*` text | Deliverable 08, 8.2 |
 | Text encoding | Files are read as UTF-8; a leading BOM is not shown and is kept on write; invalid sequences read as U+FFFD. Line numbers are 1-based | — |
@@ -871,9 +874,9 @@ Common to every tier: secret paths are refused in every mode (FR-TOOL-09); file-
 | Absolute paths | Accepted; they must still be inside an allowed root: the workspace, skill folders and `workspace.extraReadPaths` for reads, the workspace for writes | FR-TOOL-09 |
 | Home | A leading `~/` (or `~\` on Windows) is expanded to the home folder; `~user` and `$HOME` are not expanded | — |
 | Windows forms | `C:\x`, `C:/x`, `/c/x` and `\\server\share\x` are accepted and normalised to one form before any check; device paths, reserved names, drive-relative `C:x`, alternate data streams and trailing dots or spaces are handled as deliverable 02, section 5.7 says | FR-SH-13, NFR-COMP-03 |
-| Symbolic links | Resolved with `realpath` before the root and secret checks; a write to a link writes its resolved target, and the dialog shows both paths; if the resolution differs at execution time the call fails with `TOOL_PATH_CHANGED` | Deliverable 02, section 5.3; A-S10 |
+| Symbolic links | Resolved with `realpath` before the root and secret checks; a write to a link writes its resolved target, and the dialog shows both paths; if the resolution differs at execution time the call fails with `tool.path_changed` | Deliverable 02, section 5.3 |
 | Paths in results | Inside the workspace: relative with `/`. Outside it (skill folders, extra read paths): absolute in the shell's form, `/c/Users/...` on Windows | Deliverable 08, section 4.2 |
-| Length | 1 to 4,096 characters; NUL and other control characters are refused (`TOOL_INVALID_INPUT`) | — |
+| Length | 1 to 4,096 characters; NUL and other control characters are refused (`tool.invalid_input`) | — |
 
 ### 6.4 Listing rules shared by `list_directory`, `find_files` and `search_files`
 
@@ -886,7 +889,7 @@ One rule set for the three tools and for both search back ends (ripgrep and the 
 | `.git` | The `.git` folder is never listed, found or searched (`--glob '!.git'`); files in it can still be read by path |
 | Secret files | `find_files` and `search_files` drop every path on the secret list (FR-SEC-01) after resolving it, whether or not `.gitignore` lists it; `search_files` never opens a file named `.env` or `.env.*`, including the `.env.example` family (passed to `rg` as negative globs, so the content is never read); those files stay readable with `read_file`. `list_directory` may show that a secret file exists (deliverable 02, section 3.5) |
 | Symbolic links | Not followed into folders. A linked file is reported when its target is inside an allowed root |
-| Binary files | A file with a NUL byte is skipped by `search_files` (ripgrep's default, ripgrep 14.1.1 help) |
+| Binary files | A file with a NUL byte is skipped by `search_files` (ripgrep's default) |
 | Large files | `search_files` skips files over 10 MB (`--max-filesize 10M`), in both back ends |
 | Order | Results are sorted by path (`rg --sort path`; the walker sorts each folder's entries the same way), so the same tree gives the same result on every OS and back end |
 | Time | 30 s; on expiry the results so far are returned with a "stopped after 30 s" note (deliverable 07, section 6.3) |
@@ -912,13 +915,13 @@ One rule set for the three tools and for both search back ends (ripgrep and the 
 
 | Item | Specification |
 |---|---|
-| Behaviour | Streams the file and returns lines `start_line` to `end_line`, never reading the whole file into memory. `end_line` past the end is clamped. `end_line` below `start_line` is invalid input. `start_line` past the end: `model.err.range` (`TOOL_INVALID_INPUT`) |
-| Binary | A NUL byte in the first 8 KB: `model.err.binary` (`TOOL_BINARY_FILE`) (FR-TOOL-01) |
+| Behaviour | Streams the file and returns lines `start_line` to `end_line`, never reading the whole file into memory. `end_line` past the end is clamped. `end_line` below `start_line` is invalid input. `start_line` past the end: `model.err.range` (`tool.invalid_input`) |
+| Binary | A NUL byte in the first 8 KB: `model.err.binary` (`tool.binary_file`) (FR-TOOL-01) |
 | Cap | At most 2,000 lines and 50 KB (51,200 bytes) of file text per call, whichever comes first; a single line longer than the byte cap is cut at a character boundary. Small window: 200 lines or 6,000 characters (deliverable 08, section 9.5). The head is kept; `model.trunc.read` gives the next `start_line` |
 | Output | Header `model.result.read` (`{path} · lines {a}-{b} of {n}`), then one line per file line: the number, a tab, the text without its line ending. An empty file gives `{path} · 0 lines` |
 | Metadata | `path`, `startLine`, `endLine`, `totalLines`, `truncated` |
 | Card | `read  src/auth/token.ts  lines 1-120` |
-| Errors | `model.err.not-found` (`TOOL_FILE_NOT_FOUND`); `model.err.is-directory` (`TOOL_NOT_A_FILE` †); `model.err.binary`; `model.err.range`; time limit: `model.err.timeout` † (`TOOL_TIMEOUT` †) |
+| Errors | `model.err.not-found` (`tool.file_not_found`); `model.err.is-directory` (`tool.not_a_file` †); `model.err.binary`; `model.err.range`; time limit: `model.err.timeout` † (`tool.timeout`) |
 | Denials | `model.deny.secret-path`; `model.deny.outside-workspace`; Normal-tier reads under `~/.antai/sessions`, `audit`, `logs` follow the matrix |
 | Flows | SD-6 |
 
@@ -955,13 +958,13 @@ read_file {"path": "src/auth/token.ts", "start_line": 40, "end_line": 44}
 | Item | Specification |
 |---|---|
 | Behaviour | Creates missing parent folders inside the workspace and writes `content` exactly as given: UTF-8, no BOM added, line endings unchanged. An existing file is replaced and keeps its permission bits on macOS and Linux. Empty content creates an empty file |
-| Write method | Atomic replace through `FSX`, final component opened with `O_NOFOLLOW` where available (A-S10; deliverable 04, section 6.2) |
+| Write method | Atomic replace through `FSX`, final component opened with `O_NOFOLLOW` where available (deliverable 04, section 6.2) |
 | Approval preview | New file: first 200 lines and the total line count; existing file: a diff (FR-UI-04) |
-| State check | When a dialog was shown, the file must still be in the state the dialog showed (absent, or the same size, modification time and SHA-256): otherwise `model.err.file-changed` † (`TOOL_FILE_CHANGED` †) and nothing is written (pending BRD review, REF-P10) |
+| State check | When a dialog was shown, the file must still be in the state the dialog showed (absent, or the same size, modification time and SHA-256): otherwise `model.err.file-changed` † (`tool.file_changed` †) and nothing is written (beyond the BRD, REF-P10) |
 | Output | `model.result.write`: `Wrote src/x.ts (1,203 bytes, new file)` or `(… bytes, replaced)` |
 | Metadata | `path`, `bytes`, `created`, `lines` |
 | Card | `write  src/x.ts  new · 42 lines` |
-| Errors | `model.err.is-directory` (`TOOL_NOT_A_FILE` †); `model.err.write-failed` with the OS code (`TOOL_EXECUTION_FAILED`: a parent that is a file, disk full, permission denied); `model.err.path-changed` (`TOOL_PATH_CHANGED`); `model.err.file-changed` † |
+| Errors | `model.err.is-directory` (`tool.not_a_file` †); `model.err.write-failed` with the OS code (`tool.execution_failed`: a parent that is a file, disk full, permission denied); `model.err.path-changed` (`tool.path_changed`); `model.err.file-changed` † |
 | Denials | `model.deny.secret-path`; `model.deny.write-outside`; research mode: not offered (calls to it get `model.err.unknown-tool`); Normal or Dangerous per the matrix |
 | Audit | `file-write` (`tool`, `path`, `bytes`, `created`) after the write (deliverable 04, section 5.9) |
 | Flows | SD-7a, SD-7b |
@@ -990,7 +993,7 @@ write_file {"path": "docs/usage.md", "content": "# Usage\n\nRun `npm start`.\n"}
 }
 ```
 
-No `replace_all` parameter: FR-TOOL-03 says the call fails when the span matches more than once, and a model that needs several changes makes several calls, each shown and approved (Q12-7).
+No `replace_all` parameter: FR-TOOL-03 says the call fails when the span matches more than once, and a model that needs several changes makes several calls, each shown and approved.
 
 #### REF-4 `edit_file` matching
 
@@ -1034,7 +1037,7 @@ flowchart TB
 | Output | `model.result.edit`: `Edited src/auth/token.ts (1 replacement)` |
 | Metadata | `path`, `line` (first line of the change), `linesRemoved`, `linesAdded`, `bytes` |
 | Card | `edit  src/auth/token.ts  -1 +1` |
-| Errors | `model.err.not-found`; `model.err.is-directory` (`TOOL_NOT_A_FILE` †); `model.err.binary`; `model.err.edit-no-match` (`TOOL_EDIT_NO_MATCH`); `model.err.edit-many` (`TOOL_EDIT_AMBIGUOUS`); `model.err.write-failed`; `model.err.path-changed`; `model.err.file-changed` † |
+| Errors | `model.err.not-found`; `model.err.is-directory` (`tool.not_a_file` †); `model.err.binary`; `model.err.edit-no-match` (`tool.edit_no_match`); `model.err.edit-many` (`tool.edit_ambiguous`); `model.err.write-failed`; `model.err.path-changed`; `model.err.file-changed` † |
 | Denials, audit, flows | As `write_file` |
 
 ```text
@@ -1066,7 +1069,7 @@ edit_file {"path": "src/auth/token.ts", "old_text": "  if (now < token.expiresAt
 | Output | Header `{path}/ · {n} entries` († `model.result.list`), then one entry per line |
 | Metadata | `path`, `entries`, `omitted`, `ignoredSkipped` |
 | Card | `list  src/  42 entries` |
-| Errors | `model.err.not-found`; `model.err.not-directory` (`TOOL_NOT_A_DIRECTORY` †) |
+| Errors | `model.err.not-found`; `model.err.not-directory` (`tool.not_a_directory` †) |
 | Denials | `model.deny.secret-path` (a secret folder such as `~/.ssh`); `model.deny.outside-workspace` |
 | Flows | SD-6, AC-02 |
 
@@ -1110,13 +1113,13 @@ Glob rules (the `.gitignore` glob style that ripgrep's `--glob` also uses):
 | `[abc]`, `[a-z]`, `[!a]` | One character from, or not from, the class | `[A-Z]*.md` |
 | `{a,b}` | Alternatives, no empty ones, not nested | `*.{ts,tsx}` |
 | `\` | Escapes the next character | `\[draft\].md` |
-| Not allowed | A leading `/` (use `path`), `..` segments, NUL: `model.err.pattern` (`TOOL_INVALID_PATTERN` †) | — |
+| Not allowed | A leading `/` (use `path`), `..` segments, NUL: `model.err.pattern` (`tool.invalid_pattern` †) | — |
 | Letter case | Case-insensitive on macOS and Windows, case-sensitive on Linux, like the file systems' defaults | — |
 
 | Item | Specification |
 |---|---|
 | Behaviour | Lists the files under `path` that the rules of section 6.4 allow (`rg --files` with those flags, or the walker), then keeps the paths that match `pattern` with antai's own glob matcher. antai never passes the model's pattern to `rg --glob`, because a positive `--glob` overrides `.gitignore` (checked with ripgrep 14.1.1). Files only, not folders |
-| Cap | 200 paths (pending BRD review, REF-P9): about 2,500 tokens, which still fits a free-plan request; small window 100. `model.trunc.find` gives the number left out |
+| Cap | 200 paths (beyond the BRD, REF-P9): about 2,500 tokens, which still fits a free-plan request; small window 100. `model.trunc.find` gives the number left out |
 | Output | Header `{n} files match {pattern}` († `model.result.find`), then one workspace-relative path per line, sorted. No match: `No files match {pattern} under {path}.` († `model.result.find-none`); for a pattern with `/` but no `**`, it adds that `**/` searches subfolders |
 | Metadata | `pattern`, `path`, `matches`, `omitted`, `backend` (`rg` or `walker`) |
 | Card | `find  src/**/*.test.ts  12 files` |
@@ -1152,9 +1155,9 @@ find_files {"pattern": "src/**/*.test.ts"}
 }
 ```
 
-**Regular-expression dialect (answers deliverable 01, Q01-11).** ripgrep's default engine is Rust's `regex` crate, which has no look-around or backreferences; the built-in walker uses JavaScript `RegExp` with the `u` flag, which has them but lacks Rust's POSIX classes and `\A`, `\z` anchors. antai therefore accepts only the common subset and checks every pattern with its own validator before either engine runs, so a pattern behaves the same with and without `rg`:
+**Regular-expression dialect.** ripgrep's default engine is Rust's `regex` crate, which has no look-around or backreferences; the built-in walker uses JavaScript `RegExp` with the `u` flag, which has them but lacks Rust's POSIX classes and `\A`, `\z` anchors. antai therefore accepts only the common subset and checks every pattern with its own validator before either engine runs, so a pattern behaves the same with and without `rg`:
 
-| Allowed | Refused with `model.err.pattern` (`TOOL_INVALID_PATTERN` †) |
+| Allowed | Refused with `model.err.pattern` (`tool.invalid_pattern` †) |
 |---|---|
 | Literal characters and escapes `\.` `\(` `\\` `\t` | Backreferences `\1`, `\k<name>` |
 | `.` (any character except a line break) | Look-around `(?=` `(?!` `(?<=` `(?<!` |
@@ -1230,7 +1233,7 @@ search_files {"pattern": "expiresAt", "path": "src", "literal": true}
 }
 ```
 
-No other parameters: a model-written description would reach the card next to a classifier summary, and a working folder or time limit chosen by the model would bypass the user's settings (deliverable 08, section 7.1 rule 7; Q12-8). The 10,000-character limit matches the classifier's fail-closed bound (deliverable 02, section 4.1); a longer command is invalid input instead of a Dangerous dialog nobody can read.
+No other parameters: a model-written description would reach the card next to a classifier summary, and a working folder or time limit chosen by the model would bypass the user's settings (deliverable 08, section 7.1 rule 7). The 10,000-character limit matches the classifier's fail-closed bound (deliverable 02, section 4.1); a longer command is invalid input instead of a Dangerous dialog nobody can read.
 
 | Item | Specification |
 |---|---|
@@ -1239,12 +1242,12 @@ No other parameters: a model-written description would reach the card next to a 
 | Time limit | 120 s; 30 s for dev-server commands; `shell.timeouts` patterns override (FR-SH-07). On expiry the process tree is killed and the output so far is returned, status `timed-out` |
 | Refused before running | Detaching commands (`model.deny.detached`), hard floor (`model.deny.hard-floor`), secret paths (`model.deny.secret-path`), `shell.block` (`model.deny.user-block`) |
 | `sudo` | `sudo -v` on the real terminal, then the command captured with `sudo -n`, then `sudo -k` (FR-SH-09; deliverable 02, SEC-D28). Windows: `model.err.sudo-windows`. Without a human: `model.err.sudo-unattended` |
-| Output | First line `model.result.shell` (`exit {code} · {seconds} s`; `stopped by signal …`; `timed out after {n} s …`), then stdout and stderr in arrival order, redacted, then capped at 30,000 characters keeping head and tail; empty output gives `(no output)`. ANSI escape sequences are kept in v1 (deliverable 07, Q07-4, default) |
-| Head and tail | Split per deliverable 08, PC-D23 (20 % head, 80 % tail; pending, deliverables 02 and 07 state an even split); middle replaced by `model.trunc.middle`. Small window: 5,000 characters |
+| Output | First line `model.result.shell` (`exit {code} · {seconds} s`; `stopped by signal …`; `timed out after {n} s …`), then stdout and stderr in arrival order, redacted, then capped at 30,000 characters keeping head and tail; empty output gives `(no output)`. ANSI escape sequences are kept in v1 (deliverable 07, section 7.3) |
+| Head and tail | 20 % head, 80 % tail, because errors, test summaries and exit messages print last (deliverable 08, section 8.4); middle replaced by `model.trunc.middle`. Small window: 5,000 characters |
 | Status | A non-zero exit code is `ok`, not an error (deliverable 11, section 4.1) |
 | Metadata | `exitCode`, `signal`, `durationMs`, `timedOut`, `interrupted`, `outputChars`, `truncated`, `tier`, `ruleId` |
 | Card | `shell  npm test -- auth  ✓ 2.1s` (BRD 4.2); timed out: `⏱ stopped at 30s timeout, output kept` (BRD 4.5) |
-| Errors | `model.err.sudo-*`; spawn failure `model.err.internal` (`TOOL_EXECUTION_FAILED`) |
+| Errors | `model.err.sudo-*`; spawn failure `model.err.internal` (`tool.execution_failed`) |
 | Audit | `approval` for every decision except a plain Safe run; `command` when it ran (`input`, `tier`, `exitCode`, `signal`, `durationMs`, `timedOut`, `interrupted`, `outputChars`) |
 | Flows | SD-8, SD-9, SD-10a, SD-10b, SD-11, SD-12b |
 
@@ -1282,12 +1285,12 @@ shell {"command": "npm test -- auth"}
 | Metadata | Deliverable 10's fields: `name`, `source`, `folder`, `files`, `filesOmitted`, `truncated` |
 | Tier | Safe in every mode, including `research`; no dialog, no audit record (deliverable 10, EXT-D10) |
 | Card | `skill  repo-tour  ✓ loaded` (BRD 4.6) |
-| Errors | `model.err.unknown-skill` (`TOOL_SKILL_NOT_FOUND`, lists loadable names); `model.err.skill-user-only` (same code); a file that vanished or became invalid: `model.err.unknown-skill` with the reason, and `/skills` shows it |
+| Errors | `model.err.unknown-skill` (`tool.skill_not_found`, lists loadable names); `model.err.skill-user-only` (same code); a file that vanished or became invalid: `model.err.unknown-skill` with the reason, and `/skills` shows it |
 | Flows | SD-6; deliverable 10, EXT-5 |
 
 ### 6.13 Model-facing messages and error codes
 
-Text is deliverable 08's (section 8). This table ties each to its code and tools; † marks proposed additions.
+Text is deliverable 08's (section 8). This table ties each to its code and tools; † marks additions made by this document.
 
 | Message ID | Code | Tools | Kind |
 |---|---|---|---|
@@ -1297,25 +1300,25 @@ Text is deliverable 08's (section 8). This table ties each to its code and tools
 | `model.deny.outside-workspace`, `model.deny.write-outside` | — | file tools | Denial |
 | `model.deny.user-block`, `model.deny.detached` | — | `shell` | Denial |
 | `model.deny.research-mode`, `model.deny.no-human`, `model.deny.user-declined`, `model.deny.audit-unavailable` | — | all approvable calls | Denial |
-| `model.err.invalid-input` | `TOOL_INVALID_INPUT` | all | Refused before the dialog |
+| `model.err.invalid-input` | `tool.invalid_input` | all | Refused before the dialog |
 | `model.err.unknown-tool` | — | — (a call to a tool outside the set) | Refused |
-| `model.err.not-found` | `TOOL_FILE_NOT_FOUND` | file tools | Error |
-| `model.err.is-directory` | `TOOL_NOT_A_FILE` † | `read_file`, `write_file`, `edit_file` | Error |
-| `model.err.not-directory` | `TOOL_NOT_A_DIRECTORY` † | `list_directory`, `find_files` | Error |
-| `model.err.binary` | `TOOL_BINARY_FILE` | `read_file`, `edit_file` | Error |
-| `model.err.range` | `TOOL_INVALID_INPUT` | `read_file` | Error |
-| `model.err.edit-no-match`, `model.err.edit-many` | `TOOL_EDIT_NO_MATCH`, `TOOL_EDIT_AMBIGUOUS` | `edit_file` | Error |
-| `model.err.write-failed` | `TOOL_EXECUTION_FAILED` | `write_file`, `edit_file` | Error |
-| `model.err.path-changed` | `TOOL_PATH_CHANGED` | `write_file`, `edit_file` | Error |
-| `model.err.file-changed` † | `TOOL_FILE_CHANGED` † | `write_file`, `edit_file` | Error: "Error: {path} changed after the user approved the change. Nothing was written. Read it again." |
-| `model.err.timeout` † | `TOOL_TIMEOUT` † | `read_file`, `write_file`, `edit_file`, `load_skill` | Error: "Error: {tool} did not finish within {seconds} s. Nothing was changed." (writes: the outcome is unknown; deliverable 07, section 6.3) |
-| `model.err.pattern` | `TOOL_INVALID_PATTERN` † | `find_files`, `search_files` | Error |
-| `model.err.unknown-skill`, `model.err.skill-user-only` | `TOOL_SKILL_NOT_FOUND` | `load_skill` | Error |
-| `model.err.sudo-windows`, `model.err.sudo-failed`, `model.err.sudo-asked-again`, `model.err.sudo-unattended` | `TOOL_SUDO_UNSUPPORTED`, `TOOL_SUDO_FAILED` | `shell` | Error |
-| `model.err.mcp-unavailable`, `model.err.mcp-error`, `model.err.mcp-timeout` | `MCP_DISCONNECTED`, `MCP_CALL_FAILED`, `MCP_TIMEOUT` † | MCP tools | Error |
-| `model.err.internal` | `TOOL_EXECUTION_FAILED` | all | Error |
-| `model.int.*` | `INTERRUPTED_BY_USER` | all | Synthetic result (deliverable 08, section 8.5) |
-| Step cap reached on a pending call | `LIMIT_STEP_CAP` | all | "Not run: the step limit for this turn was reached." (deliverable 07, RT-D3; wording for deliverable 08 †) |
+| `model.err.not-found` | `tool.file_not_found` | file tools | Error |
+| `model.err.is-directory` | `tool.not_a_file` † | `read_file`, `write_file`, `edit_file` | Error |
+| `model.err.not-directory` | `tool.not_a_directory` † | `list_directory`, `find_files` | Error |
+| `model.err.binary` | `tool.binary_file` | `read_file`, `edit_file` | Error |
+| `model.err.range` | `tool.invalid_input` | `read_file` | Error |
+| `model.err.edit-no-match`, `model.err.edit-many` | `tool.edit_no_match`, `tool.edit_ambiguous` | `edit_file` | Error |
+| `model.err.write-failed` | `tool.execution_failed` | `write_file`, `edit_file` | Error |
+| `model.err.path-changed` | `tool.path_changed` | `write_file`, `edit_file` | Error |
+| `model.err.file-changed` † | `tool.file_changed` † | `write_file`, `edit_file` | Error: "Error: {path} changed after the user approved the change. Nothing was written. Read it again." |
+| `model.err.timeout` † | `tool.timeout` | `read_file`, `write_file`, `edit_file`, `load_skill` | Error: "Error: {tool} did not finish within {seconds} s. Nothing was changed." (writes: the outcome is unknown; deliverable 07, section 6.3) |
+| `model.err.pattern` | `tool.invalid_pattern` † | `find_files`, `search_files` | Error |
+| `model.err.unknown-skill`, `model.err.skill-user-only` | `tool.skill_not_found` | `load_skill` | Error |
+| `model.err.sudo-windows`, `model.err.sudo-failed`, `model.err.sudo-asked-again`, `model.err.sudo-unattended` | `tool.sudo_unsupported`, `tool.sudo_failed` | `shell` | Error |
+| `model.err.mcp-unavailable`, `model.err.mcp-error`, `model.err.mcp-timeout` | `mcp.disconnected`, `mcp.call_failed`, `mcp.call_timeout` | MCP tools | Error |
+| `model.err.internal` | `tool.execution_failed` | all | Error |
+| `model.int.*` | `interrupted.by_user` | all | Synthetic result (deliverable 08, section 8.5) |
+| Step cap reached on a pending call | `limit.step_cap` | all | "Not run: the step limit for this turn was reached." (deliverable 07, RT-D3; wording for deliverable 08 †) |
 
 ---
 
@@ -1347,9 +1350,9 @@ The exposed name is `mcp__<server>__<tool>` (FR-MCP-05). Rules from deliverable 
 | Part | Rule | Ref |
 |---|---|---|
 | Description | The server's text, prefixed `[MCP server <name>] `, invisible and control characters removed, cut at 2,000 characters at a word boundary with `…`, redacted before each request | Deliverable 08, section 7.4; deliverable 10, EXT-D24 |
-| Input schema | The server's `inputSchema` passed as given; antai does not rewrite it. A provider that rejects a schema fails that request, and the error names the tool when the provider does | Deliverable 10, Q10-12 |
+| Input schema | The server's `inputSchema` passed as given; antai does not rewrite it. A provider that rejects a schema fails that request, and the error names the tool when the provider does | Deliverable 10, section 6.9 |
 | Arguments | Parsed as a JSON object and otherwise passed through; the server validates them. Before each call every string value at any depth is checked against the secret-path list (plain paths, `~` forms, Windows forms, `file://` URIs); a match denies the call with `model.deny.secret-arg` | FR-MCP-07; deliverable 02, section 8.8 |
-| Annotations, server `instructions` | Never sent as text; `POL` reads the annotations | Deliverable 10, EXT-D25 |
+| Annotations, server `instructions` | Never sent as text; `POL` reads the annotations | Deliverable 10, EXT-D24 |
 | Order | Built-in tools first, then MCP tools sorted by exposed name | Deliverable 08, section 7.4 |
 | Availability | Tools of a server that connects during a turn join from the next turn; `mcp.tools.deny` and `mcp.disabledServers` remove tools from every request | FR-MCP-04, FR-MCP-06 |
 
@@ -1363,9 +1366,9 @@ The exposed name is `mcp__<server>__<tool>` (FR-MCP-05). Rules from deliverable 
 | Embedded text resource | `[resource <uri>]`, then the text |
 | Image, audio, binary resource | `[image omitted: image/png, 34 KB]` and the same shape for the others; v1 has no image input (BRD 2.2) |
 | Resource link | `[resource: <uri>]` |
-| `isError: true` | Tool error `model.err.mcp-error` with the server's text (`MCP_CALL_FAILED`) |
+| `isError: true` | Tool error `model.err.mcp-error` with the server's text (`mcp.call_failed`) |
 
-The whole text is then redacted and capped like `shell` output: 30,000 characters with head and tail kept (small window 5,000) (FR-MCP-07, A-S6).
+The whole text is then redacted and capped like `shell` output: 30,000 characters with head and tail kept (small window 5,000) (FR-MCP-07).
 
 ### 7.4 Tier and approval
 
@@ -1374,8 +1377,8 @@ The whole text is then redacted and capped like `shell` output: 30,000 character
 | Name matches `mcp.tools.deny` | Never offered to the model |
 | A string argument names a secret path | Denied (`model.deny.secret-arg`) |
 | `destructiveHint: true` | Dangerous, even when `mcp.tools.allow` matches (SEC-D21) |
-| Name matches `mcp.tools.allow` (global config, or a trusted project; bound to the server's identity, SEC-D20) | Safe |
-| `readOnlyHint: true`, the server has `trustReadOnlyHints: true`, and the annotations are unchanged since accepted | Safe |
+| Name matches `mcp.tools.allow` (global config, or a trusted project; bound to the server's identity, SEC-D20), and the tool's definition and annotations are unchanged since accepted | Safe |
+| `readOnlyHint: true`, the server has `trustReadOnlyHints: true`, and the tool's definition and annotations are unchanged since accepted | Safe |
 | Otherwise | Normal (FR-MCP-06, D16) |
 
 Patterns in `mcp.tools.allow` and `mcp.tools.deny` match the exposed name; `*` matches any run of characters (`mcp__github__*`, `mcp__*__delete_*`); `deny` beats `allow`; a pattern that matches no tool of a connected server is reported in `/mcp` (XM-26). The dialog shows server, tool and arguments (FR-UI-04). "Yes, don't ask again this session" is never offered for MCP calls (D27). In `research` mode MCP tools stay in the set, so Safe ones run and the rest are denied (deliverable 07, section 4.6).
@@ -1384,9 +1387,9 @@ Patterns in `mcp.tools.allow` and `mcp.tools.deny` match the exposed name; `*` m
 
 | Item | Specification |
 |---|---|
-| Time limit | The server's `toolTimeoutMs` (default 120,000); on expiry the request is aborted and the model gets `model.err.mcp-timeout` (`MCP_TIMEOUT` †, XM-30); the server is not killed for one slow call |
-| Not connected | `model.err.mcp-unavailable` (`MCP_DISCONNECTED`) |
-| Step-up in `run` | A 403 `insufficient_scope` becomes a tool error (`OAUTH_INSUFFICIENT_SCOPE`); interactively a confirmation comes first (SD-D17) |
+| Time limit | The server's `toolTimeoutMs` (default 120,000); on expiry the request is aborted and the model gets `model.err.mcp-timeout` (`mcp.call_timeout`, XM-30); the server is not killed for one slow call |
+| Not connected | `model.err.mcp-unavailable` (`mcp.disconnected`) |
+| Step-up in `run` | A 403 `insufficient_scope` becomes a tool error (`oauth.insufficient_scope`); interactively a confirmation comes first (SD-D17) |
 | Interrupted | Esc aborts the call; the model gets `model.int.mcp` |
 | Lock | Every MCP call takes the side-effect lock, also a Safe one (deliverable 07, section 6.2) |
 | Audit | `approval` record with arguments redacted and cut at 1,000 characters; `mcp-call` record (`server`, `tool`, `isError`, `durationMs`, `outputChars`) |
@@ -1410,7 +1413,7 @@ The files are `~/.antai/config.json` (global) and `<root>/.antai/config.json` (p
 |---|---|
 | any | The project value applies, trusted or not |
 | tighten | Applies even untrusted, because it only adds restrictions |
-| trusted | Ignored with a notice (`CONFIG_IGNORED_UNTRUSTED`) unless the folder is trusted; part of the trust hash |
+| trusted | Ignored with a notice (`config.ignored_untrusted`) unless the folder is trusted; part of the trust hash |
 | global only | Never read from a project file |
 
 | Merge | Meaning |
@@ -1436,32 +1439,32 @@ Invalid values fall back to the default with a message naming the file, key and 
 | `providers.<name>.baseURL` | `http` or `https` URL | Package or preset default | trusted | merge | — | FR-MOD-07, 08 | Deliverable 09, 3.4 |
 | `providers.<name>.apiKeyEnv` | Variable name `[A-Za-z_][A-Za-z0-9_]*` | Preset's variable | trusted | merge | — | FR-MOD-08 | Deliverable 09, 7.6 |
 | `providers.ollama.numCtx` | integer ≥ 2,048 | 32,768 | any | merge | — | FR-MOD-07 | Deliverable 09, 3.3 |
-| `profile` | Profile name | none | trusted (project pin); in global config, a default below auto-match (Q10-4) | replace | `--profile` | FR-PRF-03 | Deliverable 10, 4.3 |
+| `profile` | Profile name | none | trusted (project pin); in global config, a default below auto-match | replace | `--profile` | FR-PRF-03 | Deliverable 10, 4.3 |
 | `mode` | `research`, `manual`, `auto` | `manual`; `run` ignores it (REF-P4) | trusted, `research` or `manual` only | replace | `--mode`, `ANTAI_MODE` | FR-MODE-01, FR-CFG-05 | Deliverable 02, 3.3 |
 | `effort` | `provider-default`, `none`, `low`, `medium`, `high` | `provider-default` | any | replace | `--effort`, `ANTAI_EFFORT` | FR-MOD-06 | Deliverable 09, 6 |
 | `maxSteps` | integer 1 to 100 (larger clamped) | 25 | any | replace | `ANTAI_MAX_STEPS` | FR-AGT-02 | Deliverable 07, 3.5 |
 | `context.pruneAt` | number, more than 0 and at most 1 | 0.75 | any | replace | — | FR-AGT-05 | Deliverable 08, 10 |
-| `context.maxInstructionBytes` | integer 1,024 to 102,400 | 20,480 | any | replace | — | FR-AGT-03 | Deliverable 10, 3.3 (pending in deliverable 11) |
+| `context.maxInstructionBytes` | integer 1,024 to 102,400 | 20,480 | any | replace | — | FR-AGT-03 | Deliverable 10, 3.3 |
 | `shell.timeoutMs` | integer 1,000 to 3,600,000 | 120,000 | any | replace | — | FR-SH-07 | Deliverable 07, 6.3 |
 | `shell.timeouts` | map of command pattern to integer ms (same range) | `{}`; dev-server patterns are built-in rules at 30,000 | any | merge | — | FR-SH-07 | Deliverable 02, 4.2 |
 | `shell.allow` | list of command patterns | `[]` | trusted | union | — | FR-SH-05 | Deliverable 02, 4.6 |
 | `shell.dangerous` | list of command patterns | `[]` | tighten | union | — | FR-SH-05 | Deliverable 02, 4.6 |
 | `shell.block` | list of command patterns | `[]` | tighten | union | — | FR-SH-05 | Deliverable 02, 4.6 |
-| `shell.gitBashPath` | absolute path to `bash.exe`; `""` means auto-detect | `""` | global only (P6) | replace | `ANTAI_GIT_BASH_PATH` | FR-SH-11 | Deliverable 01, `GBL` |
+| `shell.gitBashPath` | absolute path to `bash.exe`; `""` means auto-detect | `""` | global only (FR-CFG-01) | replace | `ANTAI_GIT_BASH_PATH` | FR-SH-11 | Deliverable 01, `GBL` |
 | `tools.disabled` | list of built-in tool names; unknown names are dropped with a warning | `[]` | any | union | — | FR-TOOL-10 | Section 6.2 |
-| `mcp.tools.allow` | list of `mcp__…` patterns | `[]` | trusted (P6) | union | — | FR-MCP-06 | Section 7.4 |
+| `mcp.tools.allow` | list of `mcp__…` patterns | `[]` | trusted (FR-CFG-04) | union | — | FR-MCP-06 | Section 7.4 |
 | `mcp.tools.deny` | list of `mcp__…` patterns | `[]` | any | union | — | FR-MCP-06 | Section 7.4 |
-| `mcp.disabledServers` | list of server names | `[]` | global only | union | — | FR-MCP-04 | Deliverable 10, Q10-11 (pending in deliverable 11) |
+| `mcp.disabledServers` | list of server names | `[]` | global only | union | — | FR-MCP-04 | Deliverable 10, 6.3; lets a user switch off a trusted project's server without editing the shared file |
 | `secrets.paths` | list of paths or globs | `[]` | tighten | union | — | FR-SEC-01, FR-TOOL-09 | Deliverable 02, 5.5 |
 | `secrets.patterns` | list of regular expressions, each at most 200 characters, statically checked | `[]` | tighten | union | — | FR-SEC-03 | Deliverable 02, 6.2 |
 | `history.enabled` | boolean | `true` | any | all-true | `--no-history`, `ANTAI_NO_HISTORY` | FR-HIS-10 | Deliverable 04, 8.3 |
-| `history.retentionDays` | integer ≥ 0; `0` keeps forever | 30 | global only (P3) | replace | — | FR-HIS-09 | Deliverable 04, 8.1 |
-| `audit.retentionDays` | `0` (keep forever) or integer ≥ 1 | 90 | global only (P3) | replace | — | FR-HIS-13 | Deliverable 04, 8.1 |
-| `workspace.extraReadPaths` | list of absolute paths; entries under `~/.antai` dropped | `[]` | global only (P6) | union | — | FR-TOOL-09 | Deliverable 02, 5.6 |
+| `history.retentionDays` | integer ≥ 0; `0` keeps forever | 30 | global only (FR-CFG-01) | replace | — | FR-HIS-09 | Deliverable 04, 8.1 |
+| `audit.retentionDays` | `0` (keep forever) or integer ≥ 1 | 90 | global only (FR-CFG-01) | replace | — | FR-HIS-13 | Deliverable 04, 8.1 |
+| `workspace.extraReadPaths` | list of absolute paths; entries under `~/.antai` dropped | `[]` | global only (FR-CFG-01) | union | — | FR-TOOL-09 | Deliverable 02, 5.6 |
 | `retry.maxAttempts` | integer 1 to 10 | 5 | any | replace | — | FR-ERR-02 | Deliverable 09, 9.1 |
 | `retry.maxWaitMs` | integer 0 to 600,000 | 120,000 | any | replace | — | FR-ERR-02 | Deliverable 09, 9.1 |
 | `privacy.dataUseNotice` | boolean | `true` | global only | replace | — | NFR-PRIV-03 | Deliverable 09, 12.2 |
-| `ui.color`, `ui.symbols`, `ui.screenReader`, `ui.reducedMotion` | Proposed by deliverable 13 (Q13-1) | — | global only | replace | `--color`, `--no-color` | FR-UI-07 | Deliverable 13 |
+| `ui.color`, `ui.symbols`, `ui.screenReader`, `ui.reducedMotion` | Beyond the BRD, defined in deliverable 13 | — | global only | replace | `--color`, `--no-color` | FR-UI-07 | Deliverable 13 |
 
 ### 8.3 Value limits for list entries
 
@@ -1494,7 +1497,7 @@ Invalid values fall back to the default with a message naming the file, key and 
 | Subcommands | The result: lists, tables, the `config` view, JSON documents (section 9.4) | Warnings, errors, prompts for keys and confirmations |
 | `--help`, `--version` | The text | — |
 
-Rule: stdout carries what a script would capture; everything for a person goes to stderr (clig.dev, research A 3.4). A redirected stdout therefore never contains prompts, progress or colour codes.
+Rule: stdout carries what a script would capture; everything for a person goes to stderr. A redirected stdout therefore never contains prompts, progress or colour codes.
 
 ### 9.2 Plain-text output of `run`
 
@@ -1502,18 +1505,18 @@ Rule: stdout carries what a script would capture; everything for a person goes t
 |---|---|
 | What is printed | The assistant's text blocks, in order, as they are released after redaction hold-back (deliverable 11, section 5.7). Reasoning, tool calls and tool output are not printed |
 | Layout | Markdown as written by the model, unrendered; a blank line between text blocks; the output ends with a newline |
-| Denials | One stderr line each: `denied: shell npm test (approval required in a non-interactive run)` |
+| Denials | One stderr line each: `antai: denied: shell "npm test" (approval required in a non-interactive run)` (deliverable 13, section 11.1 draws every stderr line) |
 | Interrupted | Partial text stays on stdout; stderr says `interrupted`; exit 130 |
-| Step cap | stderr: `Stopped after 25 steps (maxSteps).`; exit 4 |
+| Step cap | stderr: `antai: stopped after 25 steps (step cap). Raise maxSteps in ~/.antai/config.json.`; exit 4 |
 | Colour | None on stdout unless `FORCE_COLOR` is set; stderr lines follow stderr's own terminal status |
 
 ### 9.3 `--json`
 
-The NDJSON stream is deliverable 11's public contract (section 5): one JSON object per line on stdout, `schemaVersion` on every line, the types `text`, `tool-call`, `tool-result`, `approval`, `usage`, `error`, `notice` (pending BRD review, IC-P6) and `done`, which is always last and carries the exit code. Scripts match on `code`, `rule` and `status`, never on message text. An old schema major will not need a flag in v1; when a `2.0` stream ships, the previous major stays available behind a `--json-schema <major>` flag for one major release (answers deliverable 11, Q11-6).
+The NDJSON stream is deliverable 11's public contract (section 5): one JSON object per line on stdout, `schemaVersion` on every line, the types `text`, `tool-call`, `tool-result`, `approval`, `usage`, `error`, `notice` (beyond the BRD, IC-P6) and `done`, which is always last and carries the exit code. Scripts match on `code`, `rule` and `status`, never on message text. An old schema major will not need a flag in v1; when a `2.0` stream ships, the previous major stays available behind a `--json-schema <major>` flag for one major release (REF-D29).
 
-### 9.4 JSON documents of `antai config` and `antai mcp list` (pending BRD review, REF-P6)
+### 9.4 JSON documents of `antai config` and `antai mcp list` (beyond the BRD, REF-P6)
 
-Each prints one pretty-printed JSON document on stdout and exits as in section 3. They follow deliverable 11's stability rules (section 5.6) with their own `schemaVersion`, and their JSON Schemas would ship beside `events.v1.schema.json` (Q12-10). Usage errors print nothing on stdout.
+Each prints one pretty-printed JSON document on stdout and exits as in section 3. They follow deliverable 11's stability rules (section 5.6) with their own `schemaVersion`, and their JSON Schemas ship beside `events.v1.schema.json`. Usage errors print nothing on stdout.
 
 ```json
 {
@@ -1529,7 +1532,7 @@ Each prints one pretty-printed JSON document on stdout and exits as in section 3
   ],
   "profile": { "name": "node-dev", "source": "auto", "file": "~/.antai/profiles/node-dev/PROFILE.md" },
   "issues": [
-    { "code": "CONFIG_PROJECT_AUTO_IGNORED", "file": ".antai/config.json", "key": "mode", "message": "A project file cannot set auto; manual is used." }
+    { "code": "config.project_auto_ignored", "file": ".antai/config.json", "key": "mode", "message": "A project file cannot set auto; manual is used." }
   ]
 }
 ```
@@ -1554,11 +1557,11 @@ Each prints one pretty-printed JSON document on stdout and exits as in section 3
 | `antai mcp list` field | Values |
 |---|---|
 | `status` | `connected`, `needs-login`, `failed`, `disabled`, `skipped`, `not-trusted` |
-| `detail` | `null`, or `{ "code": "MCP_START_FAILED", "message": "command not found: uvx" }` with the finding ID where one applies |
+| `detail` | `null`, or `{ "code": "mcp.start_failed", "message": "command not found: uvx" }` with the finding ID where one applies |
 
 ### 9.5 Colour
 
-One decision at start, in this order (research F 3.5): the proposed `--color` or `--no-color` flag (deliverable 13, Q13-1), then the proposed `ui.color` key, then `NO_COLOR` when present and not empty, then `FORCE_COLOR`, then the stream's own colour support (`hasColors()`). antai sets chalk's level itself, because `supports-color` 11 ignores `NO_COLOR`. Without colour, the dangerous-command dialog keeps its ▲ marker, heading and No default (FR-UI-07). NDJSON and JSON documents never contain colour codes.
+One decision at start, in this order: the `--color` or `--no-color` flag (deliverable 13, beyond the BRD), then the `ui.color` key, then `NO_COLOR` when present and not empty, then `FORCE_COLOR`, then the stream's own colour support (`hasColors()`). antai sets chalk's level itself, because `supports-color` 11 ignores `NO_COLOR`. Without colour, the dangerous-command dialog keeps its ▲ marker, heading and No default (FR-UI-07). NDJSON and JSON documents never contain colour codes.
 
 ---
 
@@ -1566,26 +1569,26 @@ One decision at start, in this order (research F 3.5): the proposed `--color` or
 
 | ID | Decision | Reason | Alternative rejected |
 |---|---|---|---|
-| REF-D1 | `antai "<prompt>"` starts an interactive session with the prompt as its first message (pending BRD review, REF-P1) | A person at a terminal expects to continue the conversation; `run` stays the one explicit non-interactive form | Treat it as an alias of `run` |
+| REF-D1 | `antai "<prompt>"` starts an interactive session with the prompt as its first message (beyond the BRD, REF-P1) | A person at a terminal expects to continue the conversation; `run` stays the one explicit non-interactive form | Treat it as an alias of `run` |
 | REF-D2 | `-p` is a boolean alias of the `run` subcommand; prompt words come from the positionals and are joined with spaces | Same shape as `antai run`; `antai -p config` can send a word that is also a subcommand name | `-p <prompt>` taking a value |
 | REF-D3 | `run` needs a prompt argument even with piped stdin (REF-P5) | The instruction must come from the user; piped text is untrusted data (NFR-SEC-02; deliverable 08, section 6.2) | Use stdin as the whole task |
 | REF-D4 | `run` takes its mode from `--mode` or `ANTAI_MODE` only, default `research` (REF-P4) | Nobody can approve in `run` (D19); a global `mode: auto` must not reach unattended scripts | Apply config and profile `mode` to `run` |
 | REF-D5 | `--continue` and `--resume` are refused with `run` | `run` sessions are their own `kind`; appending unattended turns to an interactive session would mix kinds and locks | Let `run` continue the last session |
 | REF-D6 | A single-value flag given twice, `--mode` with `--dangerously-skip-permissions`, and session flags on non-session subcommands are usage errors (exit 2); `antai config` accepts session flags as a preview | A conflicting or ignored safety flag is a mistake the user can fix at once; guessing is worse | Last value wins; silently ignore |
-| REF-D7 | Short forms: only the BRD's `-p` and `-h` | Every short flag is permanent public surface (deliverable 11, section 14); more can be added in a minor release | `-c`, `-r`, `-m` as other agents have |
+| REF-D7 | Short forms: only the BRD's `-p` and `-h` | Every short flag is permanent public surface (deliverable 11, section 14); more can be added in a minor release | `-c`, `-r`, `-m` for common flags |
 | REF-D8 | `--json` for sessions, `antai config` and `antai mcp list` (one JSON document each); other subcommands refuse it (REF-P6) | Scripts need the two read-only views; for the others the exit code is the result | JSON output for every subcommand |
 | REF-D9 | Seven `ANTAI_*` variables that mirror flags or the BRD's Git Bash override; none for skip, `auto`, profile, trust, home location or base URLs (REF-P3) | CI convenience without a planted environment loosening safety (deliverable 02, SEC-D19; deliverable 11, IC-D17) | A mechanical mapping of every config key |
 | REF-D10 | `antai logout` works without a terminal | Removing a stored key cannot leak one; scripts can clean up | The same terminal rule as `login` |
 | REF-D11 | `antai mcp add` refuses at once what start-up would skip: `${…}` in command, arguments or URL, protocol headers, plain HTTP to remote hosts; a literal token asks first in a terminal | Errors surface when the user types the command, not at the next start | Write the entry and let start-up skip it |
 | REF-D12 | Piped stdin: wait at most 10 s for the first byte, then continue without it | An open, idle stdin in CI must not hang a job | Wait for end of input forever |
-| REF-D13 | Tool parameters as deliverable 08 proposes (`snake_case`), plus `ignore_case` for `search_files`; no `replace_all`, and no time limit, working folder or description for `shell` | Fewer, plainer parameters for small models; nothing model-written reaches dialogs; the user's settings bound commands | Claude Code-style parameter sets |
+| REF-D13 | Tool parameters as deliverable 08 proposes (`snake_case`), plus `ignore_case` for `search_files`; no `replace_all`, and no time limit, working folder or description for `shell` | Fewer, plainer parameters for small models; nothing model-written reaches dialogs; the user's settings bound commands | Richer parameter sets: a description, time limit and working folder for `shell`; `replace_all` for `edit_file` |
 | REF-D14 | Relative tool paths resolve against the workspace root | Commands run there (FR-SH-06), so one base for tools and commands | Resolve against the folder where antai started |
-| REF-D15 | Writes through a symbolic link write its resolved target, shown in the dialog; a different resolution at execution fails with `TOOL_PATH_CHANGED` | Editing a linked file is normal; the re-check closes the swap race (A-S10) | Refuse every write through a link |
+| REF-D15 | Writes through a symbolic link write its resolved target, shown in the dialog; a different resolution at execution fails with `tool.path_changed` | Editing a linked file is normal; the re-check closes the swap race | Refuse every write through a link |
 | REF-D16 | `write_file` and `edit_file` apply only if the file is unchanged since the dialog showed it (REF-P10) | The user approved a diff of specific content | Re-match at execution and write whatever results |
 | REF-D17 | `edit_file` matches through an LF view with an offset map, counts overlapping occurrences, and writes new line breaks in the file's main line ending | Meets FR-TOOL-03 exactly: line endings ignored for matching, the rest of the file byte-identical | Convert the whole file to LF and back |
 | REF-D18 | One listing rule set for `list_directory`, `find_files` and `search_files` and both back ends: hidden files included, `.git` excluded, `.gitignore` honoured without a repository, global excludes and `.ignore` files not, sorted by path | Results must not depend on whether `rg` is installed (BRD 7.2) | ripgrep's defaults, which the walker cannot match cheaply |
 | REF-D19 | `.gitignore`-style globs (a slash-less pattern matches names at any depth); the model's pattern is matched by antai, never passed to `rg --glob` | A positive `--glob` overrides `.gitignore` (checked with ripgrep 14.1.1), which would break FR-TOOL-05 | Pass the pattern to `rg`; whole-path matching only |
-| REF-D20 | Regular expressions limited to the subset both engines share, checked by antai; the walker rewrites `\d \w \b` to Unicode; matching per line with `--crlf` (answers Q01-11) | One dialect, no engine-dependent results, no catastrophic backtracking in the walker | Accept ripgrep's dialect and fail only in the walker; use PCRE2 |
+| REF-D20 | Regular expressions limited to the subset both engines share, checked by antai; the walker rewrites `\d \w \b` to Unicode; matching per line with `--crlf` | One dialect, no engine-dependent results, no catastrophic backtracking in the walker | Accept ripgrep's dialect and fail only in the walker; use PCRE2 |
 | REF-D21 | `search_files` never opens `.env` or `.env.*` files, templates included, through negative globs; the secret post-filter stays authoritative | A positive glob for the templates switches `rg` to whitelist mode (checked); secret contents are never read | Positive globs for `.env.example` and friends |
 | REF-D22 | Caps: `find_files` 200 paths, `search_files` line text 500 characters, no total match count after the cap (REF-P9) | Fits a free-plan request; counting would need a second full search | 500 paths; a counted total |
 | REF-D23 | Slash command words match case-insensitively; a command given arguments it does not take does nothing and says so | Typing `/Help` should work; silent argument dropping hides typos | Case-sensitive commands; ignoring extra words |
@@ -1594,32 +1597,34 @@ One decision at start, in this order (research F 3.5): the proposed `--color` or
 | REF-D26 | `/resume` restores like a launch without flags (`auto` and skip not carried); `/mode` can leave skip but nothing re-enters it | FR-HIS-04 and FR-MODE-02 read strictly; leaving skip only tightens | Carry the launching process's skip into the resumed session |
 | REF-D27 | `--resume` accepts a unique prefix of at least 8 characters | Session IDs start with a readable date and time | Full ID only |
 | REF-D28 | Interactive `antai --json` reads prompts one line at a time, denies every approval, and prints slash-command output on stderr | Keeps deliverables 01 and 11's form usable and unambiguous | Refuse `--json` without `run` |
-| REF-D29 | A future schema major is reachable through `--json-schema <major>`; not implemented in v1 (answers Q11-6) | Reserves the name without adding v1 surface | A separate command per schema version |
+| REF-D29 | A future schema major is reachable through `--json-schema <major>`; not implemented in v1 | Reserves the name without adding v1 surface | A separate command per schema version |
 
 ---
 
 ## 11. Open questions
 
+No answer is expected soon. Each row's default is what this document uses; nothing here waits on an answer.
+
 | ID | Question | Options | Default assumed | Owner |
 |---|---|---|---|---|
-| Q12-1 | [USER] Should `antai "<prompt>"` start an interactive session with that first message, or be an alias of `antai run`? | Interactive; alias of `run`; refuse | Interactive (REF-D1) | Daksh, BRD review |
+| Q12-1 | [USER] Should `antai "<prompt>"` start an interactive session with that first message, or be an alias of `antai run`? | Interactive; alias of `run`; refuse | Interactive (REF-D1) | Daksh |
 | Q12-2 | [USER] Keep interactive `antai --json` (line input, every approval denied), or allow `--json` only with `run`? | Keep; `run` only | Keep, as deliverables 01 and 11 define it | Daksh |
-| Q12-3 | [USER] Should `antai run` ignore `mode` from config and profiles (default `research` unless `--mode` or `ANTAI_MODE`)? | Ignore; apply | Ignore (REF-D4) | Daksh, BRD review |
+| Q12-3 | [USER] Should `antai run` ignore `mode` from config and profiles (default `research` unless `--mode` or `ANTAI_MODE`)? | Ignore; apply | Ignore (REF-D4) | Daksh |
 | Q12-4 | [USER] Approve the seven `ANTAI_*` variables of section 4.2 as public surface? | These; fewer; a mechanical mapping | These | Daksh |
 | Q12-5 | [USER] Add short flags beyond `-p` and `-h` (for example `-c` for `--continue`, `-m` for `--model`)? | None in v1; add | None in v1 | Daksh |
 | Q12-6 | Is 10 s the right first-byte wait for piped stdin, and do GitLab runners leave stdin open and idle? | 10 s; shorter; detect `CI` | 10 s; checked on the CI runners in P1 | Deliverables 14 and 16 |
 | Q12-7 | [USER] Add `replace_all` to `edit_file` for renames inside one file? | No; yes, with the count in the dialog | No (FR-TOOL-03 as written) | Daksh |
 | Q12-8 | [USER] May the model ask for a longer `shell` time limit (up to a configured maximum)? | No; yes, capped | No: `shell.timeouts` patterns only | Daksh |
-| Q12-9 | Deliverable 11 to adopt the codes marked † (`USAGE_PROMPT_MISSING`, `USAGE_FLAG_CONFLICT`, `USAGE_UNKNOWN_COMMAND`, `USAGE_UNKNOWN_PROVIDER`, `USAGE_UNKNOWN_PROFILE`, `USAGE_SESSION_AMBIGUOUS`, `USAGE_SERVER_EXISTS`, `USAGE_HOME_WORKSPACE`, `TOOL_NOT_A_FILE`, `TOOL_NOT_A_DIRECTORY`, `TOOL_INVALID_PATTERN`, `TOOL_FILE_CHANGED`, `TOOL_TIMEOUT`, `MCP_TIMEOUT`) and exit 1 for storage failures in subcommands; deliverable 08 to adopt the † message IDs | Adopt; merge into existing codes | Adopt | Deliverables 11 and 08 |
+| Q12-9 | Deliverable 11 to list the codes marked † (`usage.prompt_missing`, `usage.flag_conflict`, `usage.unknown_command`, `usage.session_ambiguous`, `usage.server_exists`, `usage.home_workspace`, `tool.not_a_file`, `tool.not_a_directory`, `tool.invalid_pattern`, `tool.file_changed`) and exit 1 for storage failures in subcommands; deliverable 08 to list the † message IDs | Adopt; merge into existing codes | Adopt | Deliverables 11 and 08 |
 | Q12-10 | Do the `antai config` and `antai mcp list` JSON documents get schema files and versioning in deliverable 11 (`config-output.v1`, `mcp-list.v1`)? | Yes; keep them informal | Yes | Deliverable 11 |
 | Q12-11 | [USER] Should `/history delete` ask for confirmation? | No; yes | No: the ID or number comes from the list just shown | Daksh |
-| Q12-12 | Which libraries give the walker the same glob (braces, `**`, case rules) and `.gitignore` semantics as ripgrep's? (unverified) | Choose and test in P1 | Choose in P1; the shared corpus of section 6.10 decides | P1 |
+| Q12-12 | Which libraries give the walker the same glob (braces, `**`, case rules) and `.gitignore` semantics as ripgrep's? (to be confirmed in the P0 spike) | Choose and test in P1 | Choose in P1; the shared corpus of section 6.10 decides | P1 |
 | Q12-13 | ripgrep applies ignore files from folders above the searched path, possibly above the workspace root; `--no-ignore-parent` would also drop the root's own `.gitignore` for a subfolder search (checked). Should the walker read ignore files above the root too? | Root and below only; also above | Root and below; the difference is accepted and documented | P1 |
 | Q12-14 | [USER] Accept that `search_files` never searches `.env.example`, `.env.sample` and `.env.template` (still readable with `read_file`)? | Accept; search them in a second pass | Accept (REF-D21) | Daksh |
-| Q12-15 | What is the oldest ripgrep that supports every flag used (`--json`, `--no-config`, `--no-require-git`, `--no-ignore-global`, `--no-ignore-dot`, `--crlf`, `--sort path`, `--max-filesize`)? All exist in 14.1.1; older versions are unverified | Pin a minimum; probe flags | Use the walker when `rg --version` is below the minimum found in P1 | P1 |
+| Q12-15 | What is the oldest ripgrep that supports every flag used (`--json`, `--no-config`, `--no-require-git`, `--no-ignore-global`, `--no-ignore-dot`, `--crlf`, `--sort path`, `--max-filesize`)? All exist in 14.1.1; older versions are to be confirmed in the P0 spike | Pin a minimum; probe flags | Use the walker when `rg --version` is below the minimum found in the P0 spike | P0 spike |
 | Q12-16 | Deliverable 08 says caps the user sets explicitly win, but v1 has no cap keys (deliverable 07: constants). Add keys such as `tools.caps.*`? | Constants; keys | Constants in v1 | Deliverables 07 and 08 |
 
-Questions from other deliverables answered here: Q01-11 (REF-D20, section 6.10), Q11-6 (REF-D29). Used with their defaults: Q01-5 (provider variables in child environments), Q03-4 (titles of `run` sessions), Q04-12 (no `ANTAI_HOME`), Q06-2 (`end` reason `resume`), Q07-4 (ANSI kept), Q08-1 (small-window caps), Q09-8 (`GEMINI_API_KEY` not read), Q10-4 (global `profile` default), Q10-11 (`mcp.disabledServers`), Q10-12 (MCP schemas passed as given), Q13-1 (`--color` flags and `ui.*` keys).
+Settled here for other deliverables: one regular-expression dialect for `rg` and the walker (REF-D20, section 6.10, for deliverable 01) and the reserved `--json-schema <major>` flag (REF-D29, for deliverable 11). Used as other deliverables state them: provider key variables the user exported stay in child environments (deliverable 01); `run` sessions take the trimmed prompt as title (deliverable 03); no `ANTAI_HOME` (deliverable 04); `end` reason `resume` (deliverable 06); ANSI sequences kept (deliverable 07); small-window caps (deliverable 08); `GEMINI_API_KEY` not read (deliverable 09); global `profile` as a default, `mcp.disabledServers` and MCP schemas passed as given (deliverable 10); `--color` flags and `ui.*` keys (deliverable 13).
 
 ---
 
@@ -1691,19 +1696,10 @@ Questions from other deliverables answered here: Q01-11 (REF-D20, section 6.10),
 | AC-20 | 3.2, 9.3 |
 | AC-23, AC-24 | 4.2, 6.2 |
 | AC-26 | 3.10 |
-| Q01-11, Q11-6 | 6.10, 9.3 |
+| Regular-expression dialect (deliverable 01), NDJSON schema majors (deliverable 11) | 6.10, 9.3 |
 
 ---
 
 ## 13. Sources
 
-Research notes used: A (Command Line Interface Guidelines, clig.dev: stdout for output and stderr for messages, examples first in help, flag precedence), F (sections 3.1 to 3.5: `NO_COLOR`, `FORCE_COLOR`, `TERM=dumb`, `supports-color` 11 and chalk 6 without `NO_COLOR`, `INK_SCREEN_READER`).
-
-Checked for this document on 13 October 2026:
-
-- ripgrep 14.1.1, `rg --help`: `--json` (JSON Lines with `begin`, `match`, `end`, `summary`), `--no-config` and `RIPGREP_CONFIG_PATH`, `--no-require-git`, `--no-ignore-global`, `--no-ignore-dot` (`.ignore` and `.rgignore`), `--no-ignore-exclude`, `--no-ignore-parent`, `--hidden`, `--glob` ("always overrides any other ignore logic"; later globs take precedence), `--glob-case-insensitive`, `--sort=path` (single-threaded), `--max-filesize`, `--crlf`, `--follow` off by default, binary detection by NUL byte, PCRE2 needed for look-around and backreferences.
-- ripgrep 14.1.1 behaviour, run in a scratch folder: a positive `--glob` lists a file that `.gitignore` ignores; a positive glob after negative ones turns the search into whitelist mode; `--no-ignore-parent` drops the workspace root's `.gitignore` when searching a subfolder; `$` does not match before CRLF without `--crlf`; exit status 1 for no match.
-- ripgrep user guide: https://raw.githubusercontent.com/BurntSushi/ripgrep/master/GUIDE.md (ignore files, hidden files, binary files, configuration file, `--sort path`).
-- Rust `regex` crate syntax: https://docs.rs/regex/latest/regex/ (no look-around or backreferences; `[[:alpha:]]`; `\A`, `\z`; inline flags; named groups; `.` excludes `\n`; lazy quantifiers).
-- MDN, character classes: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions/Character_classes (`\d` is `[0-9]`, `\w` is `[A-Za-z0-9_]`, `\s` includes Unicode spaces, `\p{…}` only in Unicode-aware mode).
-- no-color.org (via research F): `NO_COLOR` present and not empty disables colour.
+External facts in this document (ripgrep 14.1.1 flags and behaviour, regular-expression engine differences, colour variables, package versions) were checked on 13 October 2026 and are stated where they are used; the P0 spike re-checks the ones the design depends on.

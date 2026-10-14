@@ -8,7 +8,8 @@
 | **Version** | 0.1 |
 | **Date** | 12 October 2026 |
 | **Author** | Daksh Nagpal |
-| **Based on** | BRD_1 v0.4, ARCHITECTURE_1 v0.1, DELIVERABLES_1 v0.2, deliverables 01, 02, 03, 04, 05, 06, 07, 09, 10, 11, research E and F |
+| **Based on** | BRD_1 v0.4, HLD.png, deliverables 00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 13, 14 and 16 |
+| **How to use** | Reference design, not a fixed rail. Where the technology needs something different or extra, the implementation may change it; the change is then made in every deliverable it touches, so the set keeps agreeing. |
 
 ## Contents
 
@@ -55,26 +56,26 @@ This document defines the debug log, the use of the audit trail, usage and rate-
 |---|---|---|---|
 | **User** | The terminal and `~/.antai` | To know what antai is doing, what it costs in tokens, why something failed, what it did earlier | Status bar, notices, error lines, `/usage`, `/history`, `/mcp`, the audit log |
 | **Scripts and CI** | stdout, stderr, the exit code, the CI job's home folder | A stable, machine-readable outcome | `--json` NDJSON, exit codes, stderr lines, optional log artefacts |
-| **Support engineer** | Only what the user sends | Enough facts to reproduce or explain a fault without seeing the user's code or conversation | Bug-report bundle (proposed), crash reports, debug log, `antai doctor` output |
-| **Security reviewer** | The audit log, the design documents, test reports | Proof that every risky action was decided and recorded | Audit log, `antai audit` (proposed), DLV-VER-03 secret-scan results |
+| **Support engineer** | Only what the user sends | Enough facts to reproduce or explain a fault without seeing the user's code or conversation | Bug-report bundle (beyond the BRD, OBS-P5), crash reports, debug log, `antai doctor` output |
+| **Security reviewer** | The audit log, the design documents, test reports | Proof that every risky action was decided and recorded | Audit log, `antai audit` (beyond the BRD, OBS-P3), DLV-VER-03 secret-scan results |
 | **Contributor** | A development checkout | Timings and internal decisions while building antai | Debug log with all categories, `perf` lines, the benchmark harness |
 
 ### 1.4 Principles
 
 | # | Principle | Why | BRD |
 |---|---|---|---|
-| OP1 | **Local only.** No telemetry, analytics, update check, crash upload or log upload. No code path in antai can send a log, report or counter anywhere | NFR-PRIV-01 is absolute; research E 5.2 shows Codex and Gemini CLI enable product analytics by default, so "no telemetry" is a real promise and must be tested | NFR-PRIV-01, 02, BRD 1.4, 2.2 |
+| OP1 | **Local only.** No telemetry, analytics, update check, crash upload or log upload. No code path in antai can send a log, report or counter anywhere | NFR-PRIV-01 is absolute, and a dependency or a later change could add a network call without anyone noticing, so "no telemetry" must be designed in and tested | NFR-PRIV-01, 02, BRD 1.4, 2.2 |
 | OP2 | **Detail is opt-in.** Always written: the audit log, session history (unless turned off), usage records, crash reports. The debug log only on request. Prompt and model text in the debug log only on a second, explicit request per run | The always-on records are the ones the BRD requires; everything else costs disk and privacy | FR-ERR-03, FR-HIS-13 |
-| OP3 | **Redacted by construction.** Every sink accepts only `RedactedText` and `RedactedObject` (deliverable 11, CP5). Log data passes an allow-listed serialiser per type, then `RED` | A new field never reaches a log by accident (deliverable 01, section 10.7; research E 4.5) | NFR-SEC-05, FR-SEC-03 |
+| OP3 | **Redacted by construction.** Every sink accepts only `RedactedText` and `RedactedObject` (deliverable 11, CP5). Log data passes an allow-listed serialiser per type, then `RED` | A new field never reaches a log by accident (deliverable 01, section 10.7) | NFR-SEC-05, FR-SEC-03 |
 | OP4 | **Useful when shared.** A support engineer can diagnose most faults from versions, platform facts, error codes, rule IDs, timings and state transitions, without conversation text. The user reviews any file before sharing it | The user decides what leaves the machine, by hand | NFR-PRIV-01 |
 | OP5 | **Bounded.** Every file has a size cap and a retention period; every in-memory buffer has a bound | NFR-PERF-04; disks fill silently | FR-ERR-03, FR-HIS-09, 13 |
 | OP6 | **Free when off.** With debug off, no telemetry integration is registered, no log data is built, and only a fixed-size breadcrumb ring is kept | The NFR-PERF targets apply to the default configuration | NFR-PERF-01, 02 |
 | OP7 | **One vocabulary.** The same `sessionId`, `turn`, `seq`, `toolCallId`, error code and rule ID appear on every surface, so records join without guessing | Support works from fragments | — |
 | OP8 | **Observing never changes behaviour.** A failing debug write stops debug logging with one notice; it never fails a turn. The audit log is the exception, because it is a safety record (deliverable 04, P7) | A diagnostic aid must not become a fault source | FR-HIS-13 |
 
-### 1.5 Items pending BRD review
+### 1.5 Additions beyond BRD v0.4
 
-The BRD names `--debug`, crash reports, `/usage` and the audit log, but no environment switch, no content opt-in, no audit viewer and no diagnostics command. This document proposes them and marks the text "(pending BRD review, OBS-Pn)".
+These go beyond BRD v0.4. The design uses them as stated; the BRD can adopt them later. The BRD names `--debug`, crash reports, `/usage` and the audit log, but no environment switch, no content opt-in, no audit viewer and no diagnostics command. The text marks them "(beyond the BRD, OBS-Pn)".
 
 | Ref | Proposal | BRD baseline | Section |
 |---|---|---|---|
@@ -84,7 +85,7 @@ The BRD names `--debug`, crash reports, `/usage` and the audit log, but no envir
 | OBS-P4 | `antai doctor`: read-only diagnostics with `--json` and an opt-in `--connect` | None (FR-CLI-05 lists the subcommands) | 6.3 |
 | OBS-P5 | `antai doctor --bundle`: a local, redacted bug-report file that the user reviews before sharing; never uploaded | None | 6.4 |
 
-Items from other documents used here unchanged: deliverable 04 P3 (retention keys from global config only), P7 (audit write failure denies side effects), P9 (`audit.retentionDays: 0` keeps forever); deliverable 07 Q07-7 (contained internal errors); deliverable 11 IC-P1 to IC-P3 (exit codes 129, 130, 143 and their precedence), IC-P6 and Q11-5 (an NDJSON `notice` type); A-C5 (nested usage fields), A-C7 (antai's own retry).
+Additions from other documents used here unchanged: deliverable 04 P3 (retention keys from global config only, now in BRD v0.4, FR-CFG-01), P7 (audit write failure denies side effects), P9 (`audit.retentionDays: 0` keeps forever); deliverable 07 RT-D13 (an internal error inside a turn ends only that turn); deliverable 11 IC-P1 to IC-P3 (exit codes 129, 130, 143 and their precedence), IC-P6 (an eighth NDJSON type, `notice`); the AI SDK v7 nested usage fields; SDK `maxRetries: 0` plus antai's own retry wrapper (`RTY`).
 
 ---
 
@@ -104,7 +105,7 @@ flowchart LR
         S6[("Audit log<br/>audit/DATE.jsonl")]
         S7[("Debug log<br/>logs/debug-ID.jsonl")]
         S8[("Crash reports<br/>logs/crash-*.json")]
-        S9["antai doctor and bundle<br/>(proposed)"]
+        S9["antai doctor and bundle<br/>(beyond the BRD)"]
     end
     U(["User"])
     CI(["Scripts and CI"])
@@ -141,14 +142,14 @@ The dashed edge is the only way anything reaches a support engineer: the user op
 | Notices and error lines | `MSG` text through `BUS` | Screen; stderr in `PLAIN` | When something happens | What happened and what to do next (NFR-USE-02) | User | Screen only | 6.1; deliverable 11, section 13 |
 | `/usage` | `USG`, `RTY` snapshot | Screen | On request | Tokens per turn, session and day; context; rate limits | User | Screen only | 5.3 |
 | `/history`, `/mcp` | `HS`, `MCPM` | Screen | On request | Sessions with turns and tokens; MCP state, stderr tail, OAuth state | User | Screen only | Deliverables 04 and 10 |
-| `--json` NDJSON | `PLAIN` | stdout | `--json` runs | Seven event types, `done` last | Scripts and CI | Caller's | 8; deliverable 11, section 5 |
+| `--json` NDJSON | `PLAIN` | stdout | `--json` runs | The seven BRD line types plus `notice`, `done` last | Scripts and CI | Caller's | 8; deliverable 11, section 5 |
 | stderr text | `PLAIN`, `CLI` | stderr | Non-interactive runs | Errors, notices, retries, debug log path | CI logs | Caller's | 8.3 |
 | Exit code | `LIFE` | Process | Exit | 0 to 5, 129, 130, 143 | Scripts and CI | — | 8.1; deliverable 11, section 12 |
 | Session history | `HS` | `~/.antai/sessions/` | Unless `--no-history` | Conversation, events, usage, title (redacted) | User (resume, `/history`) | 30 days | Deliverable 04, sections 5.7 to 5.12 |
 | Audit log | `AUD` | `~/.antai/audit/` | Always | Decisions, commands, writes, settings, credentials actions; no conversation text | User, security reviewer | 90 days | 4; deliverable 04, section 5.13 |
 | Debug log | `DBG` | `~/.antai/logs/` | `--debug` or `ANTAI_DEBUG` | Allow-listed metadata, timings, decisions; content only with `--debug-content` | Support engineer, contributor | 7 days | 3 |
 | Crash reports | `DBG` via `LIFE` | `~/.antai/logs/` | Internal error | Versions, platform, stack, breadcrumbs; no conversation text | Support engineer | 7 days | 6.2 |
-| Doctor report, bundle | `CLI` with `BOOT` diagnostics | Screen, stdout, `~/.antai/logs/` | On request (proposed) | Check rows; bundle adds crash reports and chosen logs | Support engineer | Screen; bundle 7 days | 6.3, 6.4 |
+| Doctor report, bundle | `CLI` with `BOOT` diagnostics | Screen, stdout, `~/.antai/logs/` | On request (beyond the BRD) | Check rows; bundle adds crash reports and chosen logs | Support engineer | Screen; bundle 7 days | 6.3, 6.4 |
 
 ### 2.3 OBS-2 Correlation keys
 
@@ -175,7 +176,7 @@ erDiagram
 | `seq` | Session record number, reserved before the audit write (DS-D14) | Session records; audit `seq` (null without a session file) |
 | `turn` | User messages so far | Session records, audit records of events, NDJSON lines, debug `data.turn` |
 | `toolCallId` | Provider's opaque ID | `approval`, `command`, `file-write`, `mcp-call` events; tool messages; NDJSON `tool-call`, `approval`, `tool-result`; debug `data.toolCallId` |
-| Error code | `PROVIDER_QUOTA_DAILY` style (deliverable 11, section 11.2) | NDJSON `error.code`, audit `error` event `code`, debug lines, crash reports for `AntaiError`s |
+| Error code | `<category>.<snake_case>`, e.g. `provider.quota_daily` (deliverable 11, section 11.2) | NDJSON `error.code`, audit `error` event `code`, debug lines, crash reports for `AntaiError`s |
 | Rule ID | From `RULES`, e.g. `D-rm-recursive` (deliverable 02) | Audit `approval.rule`, NDJSON `approval.rule`, debug `safety` lines |
 | Process start | `pid` and start time | Debug `debug-start` line, crash report file name |
 
@@ -190,10 +191,10 @@ Debug lines keep deliverable 04's envelope (`v`, `ts`, `level`, `cat`, `sessionI
 | Switch | Effect | Categories | Content (3.6) | Status |
 |---|---|---|---|---|
 | `--debug` | Debug log for this process: interactive, `run`, and subcommands | All | No | BRD (FR-CLI-04, FR-ERR-03) |
-| `ANTAI_DEBUG=1` (also `true`) | Same as `--debug`; convenient for subcommands, wrappers and CI jobs | All | No | Pending BRD review, OBS-P1 |
-| `ANTAI_DEBUG=mcp,oauth` | Debug log with only the listed categories (section 3.2). With `--debug` as well, the list still narrows. An unknown name gives one notice and is ignored | Listed | No | Pending BRD review, OBS-P1 |
+| `ANTAI_DEBUG=1` (also `true`) | Same as `--debug`; convenient for subcommands, wrappers and CI jobs | All | No | Beyond the BRD, OBS-P1 |
+| `ANTAI_DEBUG=mcp,oauth` | Debug log with only the listed categories (section 3.2). With `--debug` as well, the list still narrows. An unknown name gives one notice and is ignored | Listed | No | Beyond the BRD, OBS-P1 |
 | `ANTAI_DEBUG=0`, empty or unset | Off, unless `--debug` is given | — | — | — |
-| `--debug-content` | Implies `--debug`; adds redacted prompts, instructions and model text | As above | Yes | Pending BRD review, OBS-P2 |
+| `--debug-content` | Implies `--debug`; adds redacted prompts, instructions and model text | As above | Yes | Beyond the BRD, OBS-P2 |
 
 Rules:
 
@@ -306,7 +307,7 @@ Fields are the allow-list. Anything not listed is not logged. All strings pass `
 
 ### 3.6 Content opt-in: `--debug-content`
 
-Most faults are diagnosed from metadata. Some are not: a model that ignores an instruction, a pruning step that dropped the wrong part, a provider that rejects a request shape. Those need the exact request. The instructions and the pruned copy sent to the model are stored nowhere else (deliverable 04, section 7.2), so the debug log is the only place they can be seen (pending BRD review, OBS-P2).
+Most faults are diagnosed from metadata. Some are not: a model that ignores an instruction, a pruning step that dropped the wrong part, a provider that rejects a request shape. Those need the exact request. The instructions and the pruned copy sent to the model are stored nowhere else (deliverable 04, section 7.2), so the debug log is the only place they can be seen (beyond the BRD, OBS-P2).
 
 | With `--debug-content` | Detail |
 |---|---|
@@ -345,11 +346,11 @@ Example lines (session ID shortened):
 ```jsonl
 {"v":1,"ts":"2026-10-12T14:32:03.402Z","level":"info","cat":"perf","sessionId":"2026-10-12_1432_a1b2c3","msg":"debug-start","data":{"antaiVersion":"1.0.0","sdkVersion":"7.0.137","node":"24.11.0","os":"darwin","arch":"arm64","pid":4242,"categories":"all","content":false,"renderer":"ink"}}
 {"v":1,"ts":"2026-10-12T14:32:09.118Z","level":"debug","cat":"provider","sessionId":"2026-10-12_1432_a1b2c3","msg":"model-call-end","data":{"turn":1,"step":1,"provider":"groq","model":"groq:openai/gpt-oss-120b","status":200,"finishReason":"tool-calls","input":4120,"output":96,"cacheRead":3072,"responseTimeMs":1840,"timeToFirstOutputMs":412}}
-{"v":1,"ts":"2026-10-12T14:32:09.120Z","level":"warn","cat":"provider","sessionId":"2026-10-12_1432_a1b2c3","msg":"retry","data":{"turn":2,"attempt":1,"maxAttempts":5,"reason":"rate-limit-minute","waitMs":23000,"code":"PROVIDER_RATE_LIMIT"}}
+{"v":1,"ts":"2026-10-12T14:32:09.120Z","level":"warn","cat":"provider","sessionId":"2026-10-12_1432_a1b2c3","msg":"retry","data":{"turn":2,"attempt":1,"maxAttempts":5,"reason":"rate-limit-minute","waitMs":23000,"code":"provider.rate_limited"}}
 {"v":1,"ts":"2026-10-12T14:32:11.950Z","level":"info","cat":"safety","sessionId":"2026-10-12_1432_a1b2c3","msg":"decision","data":{"turn":1,"toolCallId":"call_1","tool":"edit_file","tier":"normal","rule":"file-write","status":"user-approval","dialogs":1}}
 ```
 
-Field names inside `data` follow deliverable 11's names (`Usage`, `RetryReason`, error codes); the SDK's performance field names are confirmed in P0 (Q15-7).
+Field names inside `data` follow deliverable 11's names (`Usage`, `RetryReason`, error codes); the SDK's performance field names are to be confirmed in the P0 spike.
 
 ### 3.9 OBS-4 AI SDK integration
 
@@ -377,7 +378,7 @@ sequenceDiagram
     DBG->>DBG: queue lines: provider, tool, perf
 ```
 
-| Hook (research F 6.1, 6.2) | Kept | Dropped |
+| Hook (AI SDK v7) | Kept | Dropped |
 |---|---|---|
 | `onStart`, `onStepStart` | Step number, call ID | Settings objects |
 | `onLanguageModelCallStart` | Model, `callId`, tool count, message count | The standardised prompt and call options, unless `--debug-content` |
@@ -388,11 +389,11 @@ sequenceDiagram
 
 Facts and limits:
 
-- With no integration registered the SDK records nothing ("To disable telemetry globally, do not register any telemetry integrations", research F 6.1). antai registers none when debug is off, so the SDK adds no work to a normal run.
-- The integration is registered once per process and stays for the process lifetime. Agents set no `telemetry` option (deliverable 07, section 4.1), so the SDK's defaults apply and the integration's allow-list is what keeps prompts out. Whether `recordInputs: false` also removes the prompt from the events an integration receives is unverified (Q15-6); if P0 confirms it, `AG` can set it as a second layer when content is off.
+- With no integration registered the SDK records nothing; not registering one is the SDK's own way to turn telemetry off. antai registers none when debug is off, so the SDK adds no work to a normal run.
+- The integration is registered once per process and stays for the process lifetime. Agents set no `telemetry` option (deliverable 07, section 4.1), so the SDK's defaults apply and the integration's allow-list is what keeps prompts out. Whether `recordInputs: false` also removes the prompt from the events an integration receives is to be confirmed in the P0 spike; the design relies on the allow-list, and if the spike confirms it, `AG` also sets it as a second layer when content is off.
 - The usage counted for `/usage` comes from `onStepEnd` through `USG` (deliverable 07, section 5.4), never from the debug integration, so usage works with debug off.
 - The `ai:telemetry` tracing channel is not used.
-- `@ai-sdk/devtools` is never a dependency and never shipped: it writes full prompts to `.devtools/` in the working directory (research F 6.3).
+- `@ai-sdk/devtools` is never a dependency and never shipped: it writes full prompts to `.devtools/` in the working directory.
 
 ### 3.10 No OpenTelemetry in v1
 
@@ -401,7 +402,7 @@ Facts and limits:
 | Path | What it needs | Requirement change |
 |---|---|---|
 | Offline conversion | A separate tool reads `debug-*.jsonl` and writes OTLP JSON. The debug lines already carry `ts`, `callId`, `toolCallId`, durations and usage, enough to rebuild call and tool spans | None: antai is unchanged |
-| Opt-in exporter | `SDK` also registers `@ai-sdk/otel` when a global-only key names an endpoint; project config can never set it (Codex ignores `otel` in project config, research E 5.2); inputs and outputs off by default; a loopback-only endpoint at first | NFR-PRIV-01 must allow a user-named destination; a BRD decision |
+| Opt-in exporter | `SDK` also registers `@ai-sdk/otel` when a global-only key names an endpoint; project config can never set it (a cloned repository must not be able to name a destination for antai's data); inputs and outputs off by default; a loopback-only endpoint at first | NFR-PRIV-01 must allow a user-named destination; a BRD decision |
 
 Because `registerTelemetry` is already isolated in `src/sdk/` and `DBG`, either path touches only those two modules.
 
@@ -477,11 +478,11 @@ The `approval` record of an action is written before the action runs, and its `c
 | Read-only antai actions (`/usage`, `antai audit`, `antai doctor`) | They change nothing | — |
 | Token usage | Not an action; usage is in session files | `/usage`, session `usage` records |
 
-Whether Safe in-workspace reads should be audited too is Q15-13 (default no: it would add a record to most tool calls and make the log harder to read for the actions that matter).
+Safe in-workspace reads are not audited (OBS-D13): auditing them would add a record to most tool calls and make the log harder to read for the actions that matter.
 
 ### 4.4 Reading the audit log
 
-**Today, with standard tools.** The files are JSON Lines in `~/.antai/audit/<YYYY-MM-DD>.jsonl` (UTC days). The user guide (DLV-DOC-02) documents recipes such as:
+**With standard tools.** The files are JSON Lines in `~/.antai/audit/<YYYY-MM-DD>.jsonl` (UTC days). The user guide (DLV-DOC-02) documents recipes such as:
 
 ```sh
 # every denial today
@@ -494,7 +495,7 @@ jq -c 'select((.kind=="session-start" and .mode=="skip") or (.kind=="setting" an
 cat ~/.antai/audit/*.jsonl | jq -r 'select(.kind=="file-write") | .path' | sort | uniq -c | sort -rn
 ```
 
-**Proposed: `antai audit`** (pending BRD review, OBS-P3; Should). A read-only viewer, so that a user without `jq`, or on Windows, can answer the same questions.
+**With `antai audit`** (beyond the BRD, OBS-P3; Should, from P4). A read-only viewer, so that a user without `jq`, or on Windows, can answer the same questions.
 
 | Option | Meaning | Default |
 |---|---|---|
@@ -522,13 +523,13 @@ A `/audit` slash command for the current session is not proposed: the transcript
 
 | Property | v1 behaviour | Reference |
 |---|---|---|
-| Always written | Audit record before session record; if the audit file cannot be written, calls that need a record are denied (pending BRD review, deliverable 04 P7) | DS-D14, SEC-D27 |
+| Always written | Audit record before session record; if the audit file cannot be written, calls that need a record are denied (beyond the BRD, deliverable 04 P7) | DS-D14, SEC-D27 |
 | Protected from the model | Writes under `~/.antai/**` are protected-path writes, Dangerous in every mode; reads are Normal when the workspace is the home folder | FR-TOOL-11, deliverable 04 P5 |
 | Not tamper-evident | Plain JSONL that the user, or any process with the user's rights, can edit or delete. No hash chain in v1; with no remote copy it would add little | Deliverable 02, section 11.3, SEC-D27, RR-11 |
-| Concurrent processes | One shared file per UTC day; each record one `O_APPEND` write of at most 8 KB; no lock | DS-D13, Q04-8 |
+| Concurrent processes | One shared file per UTC day; each record one `O_APPEND` write of at most 8 KB; no lock | DS-D13 |
 | Crashes | A torn last line is skipped by readers. The crash path writes no audit record (deliverable 07, section 9.4), so the last action before a crash may have its `approval` record but no `command` record; resume shows the user that turn's records | NFR-REL-01, deliverable 04 section 6.8 |
 | Clock | Day files and retention follow the system clock in UTC; a wrong clock files records under the wrong day | Deliverable 04, section 8.2 |
-| Retention | 90 days (`audit.retentionDays`), `0` keeps forever, read from global config only. Deleting a session never deletes its audit records | Deliverable 04 P3, P9 |
+| Retention | 90 days (`audit.retentionDays`), `0` keeps forever, read from global config only. Deleting a session never deletes its audit records | FR-CFG-01; deliverable 04 P9 |
 | Coverage | Interactive, `run`, `--no-history` and `history.enabled: false` alike | AC-31, AC-34 |
 | What it proves | What antai decided and did, as recorded by antai on the user's machine. It is a record for the user, not evidence against the user | Deliverable 02, section 11.3 |
 
@@ -576,7 +577,7 @@ flowchart LR
 
 `USG` is the only reader of the SDK usage object (deliverable 11, section 8.6). Provider-reported usage is the source of truth; local token estimates exist only for the budget guard and pruning (deliverable 09, section 4.6) and are never shown as usage.
 
-| Counter (`Usage`, deliverable 11) | SDK source (A-C5) | Meaning for the user |
+| Counter (`Usage`, deliverable 11) | SDK source (v7 nested usage fields) | Meaning for the user |
 |---|---|---|
 | `input` | `inputTokens` | Tokens sent, including cached ones |
 | `cacheRead` | `inputTokenDetails.cacheReadTokens` | Part of `input` served from the provider's prompt cache. Groq does not count cached tokens toward its limits (deliverable 09, section 8.1) |
@@ -594,7 +595,7 @@ A field the provider does not report is `null` and shown as "—"; a sum that in
 | Step | `step.usage` in `onStepEnd` | `usage` event (`scope: 'step'`) for the status bar; debug `provider` line per call |
 | Turn | `USG` sums the steps of every stream call in the turn; `result.usage` is compared, a mismatch logged (deliverable 07, section 5.4). An interrupted turn holds its completed steps only | `usage` record (deliverable 04, section 5.10), `usage` event (`scope: 'turn'`), NDJSON `usage` line, `turn-end.usage` |
 | Session | Running total, including the title call and `/compact` calls | `usage.sessionTotal`, `index.json` `tokens`, `/history`, `session-ended.summary`, NDJSON `done.tokens` |
-| Day | Computed when `/usage` opens: the `usage` records with a `ts` since local midnight, from sessions whose `lastActivityAt` is today. Sessions with `--no-history` and other machines are not included (Q15-12) | `/usage` only, labelled as an estimate |
+| Day | Computed when `/usage` opens: the `usage` records with a `ts` since local midnight, from sessions whose `lastActivityAt` is today. Sessions with `--no-history` and other machines are not included, because that would need a per-turn usage record in the audit log | `/usage` only, labelled as an estimate |
 
 Requests that fail before generation (a 413, a 429, a network error) report no usage and are not counted, although a provider may count them. Attempts that `RTY` retried before the first content part are counted only when the provider reported usage for them.
 
@@ -620,12 +621,12 @@ FR-UI-02 asks for token usage "with the share of the context window when known".
 | Item | Value | Updated |
 |---|---|---|
 | Tokens | Session total (`total`, or `input + output`) | After each step |
-| Context share | Last step's `inputTokens` ÷ the context window (R-X6), not the summed usage, which would overstate it | After each step |
+| Context share | Last step's `inputTokens` ÷ the effective window E (the context window, or the plan's per-minute token limit when smaller, deliverable 08, 9.1), not the summed usage, which would overstate it | After each step |
 | Share hidden | When the window is the 32,000-token fallback for an unknown model (FR-AGT-05): the window is assumed, not known. The unknown-model notice already names the config key to set (deliverable 09, section 4.5) | — |
 | Rate-limit warning | Shown only when low: tokens remaining this minute below 20 % of the limit, or requests remaining in a per-day window below 10 % | After each response |
 | Retry countdown | During a scheduled retry or budget wait, the countdown line of deliverable 09, section 8.7 | Each second |
 
-The two thresholds are proposals for deliverable 13 (Q15-14); they keep the bar quiet in normal use and visible before a limit is hit.
+The two thresholds keep the bar quiet in normal use and visible before a limit is hit; deliverable 13 draws the warning.
 
 ### 5.5 Rate-limit state
 
@@ -633,7 +634,7 @@ The two thresholds are proposals for deliverable 13 (Q15-14); they keep the bar 
 
 - A snapshot older than its reset time is shown as "reset since 14:35" and is ignored by the budget guard (deliverable 09, section 8.4).
 - The window label comes from the provider profile: Groq's `-requests` headers are per day and its `-tokens` headers per minute; OpenAI's are both per minute.
-- `/usage` needs the limits as well as the remaining values. Deliverable 11's `RateLimitSnapshot` has remaining values and resets only; this document adds optional `limitRequests` and `limitTokens` fields, an additive change (deliverable 11, CP7; Q15-9).
+- `/usage` needs the limits as well as the remaining values. Deliverable 11's `RateLimitSnapshot` therefore carries `limitRequests` and `limitTokens` beside the remaining values and resets, an additive change made for this document (OBS-D21; deliverable 11, CP7).
 
 ### 5.6 Free-plan budget
 
@@ -650,7 +651,7 @@ When a limit is reached, the user sees the one-line messages of deliverable 09, 
 
 ### 5.7 Cost
 
-v1 shows **no cost estimate**. The model catalogue has no price fields (deliverable 09, section 4.1); the default plan costs nothing; preset and custom endpoints have unknown prices; and prices change more often than antai releases, so a figure would often be wrong. Tokens by type, including cached and reasoning tokens, are what a user needs to compare against a provider's price page. A later version could add `pricing` with `checkedOn` and `source` to `models.json`, maintained by the catalogue process (deliverable 09, section 4.7), and show a local estimate at list price as Claude Code does (research E 5.3), labelled as such (Q15-8).
+v1 shows **no cost estimate**. The model catalogue has no price fields (deliverable 09, section 4.1); the default plan costs nothing; preset and custom endpoints have unknown prices; and prices change more often than antai releases, so a figure would often be wrong. Tokens by type, including cached and reasoning tokens, are what a user needs to compare against a provider's price page. A later version could add `pricing` with `checkedOn` and `source` to `models.json`, maintained by the catalogue process (deliverable 09, section 4.7), and show a local estimate at list price, labelled as an estimate with the date the prices were checked.
 
 ---
 
@@ -661,10 +662,10 @@ v1 shows **no cost estimate**. The model catalogue has no price fields (delivera
 | Rule | Detail | Reference |
 |---|---|---|
 | Two parts | Every error and warning has "what happened" and "what to do next" from `MSG`; a test fails on an entry without both | NFR-USE-02, deliverable 11 section 13 |
-| Name the thing | Provider, file, key, server or command, then cause, then next step | FR-ERR-01, research E 6.3 |
+| Name the thing | Provider, file, key, server or command, then cause, then next step | FR-ERR-01 |
 | One text everywhere | `formatError` builds one `ErrorPayload`; screen, stderr and NDJSON `error` carry the same text; `run` gets the flag form of the next step (`--model` instead of `/model`) | Deliverable 11, section 11.3 |
 | No internals on screen | No error codes, provider bodies, raw Node error codes or stack traces on screen. Codes appear in NDJSON, the audit `error` record and the debug log; `antai doctor` lists recent ones | Deliverable 11, section 13.2 |
-| Details have a home | When the screen text cannot say enough (`PROVIDER_*` unknown cases), it points to `--debug`; the debug `provider` line then holds status, provider error type and request ID | Deliverable 09, section 10.1 |
+| Details have a home | When the screen text cannot say enough (`provider.unknown`), it points to `--debug`; the debug `provider` line then holds status, provider error type and request ID | Deliverable 09, section 10.1 |
 | Recorded | Every error shown is an `error` event in the session and the audit log (category, code, provider, catalogue text) | Deliverable 04, section 5.9 |
 | Degrade, not fail | A failing MCP server, invalid skill or unwritable history becomes a notice; the session continues | NFR-REL-02 |
 
@@ -682,7 +683,7 @@ Where each class of error is visible (classes from deliverable 11, section 11.1)
 
 ### 6.2 Crash reports
 
-Written by `DBG` for `LIFE` on an uncaught exception or unhandled rejection (the process exits 1), and by `SC` for an internal error contained inside a turn (the turn ends, the session continues; deliverable 07, RT-D14 and Q07-7). They exist without `--debug` (FR-ERR-03, FR-ERR-04). The flow is deliverable 03, SD-23b; the file rules are deliverable 04, section 5.15 (`logs/crash-<YYYYMMDDTHHMMSSZ>-<pid>.json`, write-once, `0600`, at most 64 KB, 7 days).
+Written by `DBG` for `LIFE` on an uncaught exception or unhandled rejection (the process exits 1), and by `SC` for an internal error contained inside a turn (the turn ends, the session continues; deliverable 07, RT-D13). They exist without `--debug` (FR-ERR-03, FR-ERR-04). The flow is deliverable 03, SD-23b; the file rules are deliverable 04, section 5.15 (`logs/crash-<YYYYMMDDTHHMMSSZ>-<pid>.json`, write-once, `0600`, at most 64 KB, 7 days).
 
 | Field | Content | Why |
 |---|---|---|
@@ -699,7 +700,7 @@ Not in a crash report: conversation text, tool output, environment variables, co
 
 Contained crash reports are limited to five per session; later ones only increase a counter in the `error` record and the debug log, so a fault that repeats every turn cannot fill the disk.
 
-The message (`MSG`, two parts): "antai stopped after an internal error. Report saved to `~/.antai/logs/crash-20261012T151044Z-4242.json`." and "Run `antai doctor --bundle` to prepare a report you can review and share." (before OBS-P5 is accepted: "Send that file with a short description of what you were doing."). If the report cannot be written, the message has no path (deliverable 04, section 6.10).
+The message (`MSG`, two parts): "antai stopped after an internal error. Report saved to `~/.antai/logs/crash-20261012T151044Z-4242.json`." and "Run `antai doctor --bundle` to prepare a report you can review and share." (until the bundle ships in P6: "Send that file with a short description of what you were doing."). If the report cannot be written, the message has no path (deliverable 04, section 6.10).
 
 ```json
 {"v":1,"ts":"2026-10-12T15:10:44.512Z","antaiVersion":"1.0.0","node":"24.11.0","os":"darwin","osRelease":"25.5.0","arch":"arm64","sessionId":"2026-10-12_1432_a1b2c3","phase":"turn","origin":"contained","renderer":"ink","uptimeMs":1843201,"memory":{"rssMb":212,"heapUsedMb":96},"error":{"name":"TypeError","message":"Cannot read properties of undefined (reading 'toolCallId')","stack":"TypeError: …\n    at mapPart (~/.npm-global/lib/node_modules/@geekyants/antai/dist/cli.js:…)"},"breadcrumbs":[{"ts":"2026-10-12T15:10:43.900Z","cat":"provider","msg":"model-call-start","turn":7},{"ts":"2026-10-12T15:10:44.505Z","cat":"provider","msg":"unknown-part","turn":7}],"debugLog":null}
@@ -707,7 +708,7 @@ The message (`MSG`, two parts): "antai stopped after an internal error. Report s
 
 ### 6.3 OBS-6 `antai doctor`
 
-A read-only diagnostics command (pending BRD review, OBS-P4; Should). It follows the contract Codex states for its own `doctor` (research E 5.4): inspect, never repair; every check returns a redacted row; the same rows back the human output and `--json`.
+A read-only diagnostics command (beyond the BRD, OBS-P4; Should). Its contract: inspect, never repair, because a support step must not change the state it is meant to describe; every check returns a redacted row; the same rows back the human output and `--json`, so a person and a script see the same facts.
 
 ```mermaid
 flowchart TB
@@ -762,7 +763,7 @@ A `/doctor` slash command could show the same rows inside a session later; it is
 
 ### 6.4 Bug-report bundle
 
-`antai doctor --bundle [<path>]` (pending BRD review, OBS-P5) writes one local JSON file that the user reviews and then shares by hand. antai never uploads, emails, opens a browser or files an issue (NFR-PRIV-01; research E 5.4 notes Codex's `/feedback` uploads to Sentry, which antai must not copy).
+`antai doctor --bundle [<path>]` (beyond the BRD, OBS-P5) writes one local JSON file that the user reviews and then shares by hand. antai never uploads, emails, opens a browser or files an issue: NFR-PRIV-01 forbids any upload, so sharing is always the user's own act.
 
 | Section | Default | With an option | Never |
 |---|---|---|---|
@@ -777,7 +778,7 @@ A `/doctor` slash command could show the same rows inside a session later; it is
 
 Steps: collect; run `RED` again over every string with the current known values and formats (defence in depth: records were redacted with the values known when they were written); replace the home prefix with `~` and the workspace root with `<workspace>`; cap the file at 5 MiB, cutting the debug log first; write it with mode `0600` to `~/.antai/logs/report-<YYYYMMDDTHHMMSSZ>.json` or to the given path, never overwriting an existing file; print a summary of the sections, record counts and size, the path, and: "Read this file before you share it. It contains command lines and file paths from the audit log" (and "and conversation text" when included).
 
-Why one JSON file: it opens in any editor for review, needs no archive library (no native dependencies, NFR-COMP-04) and keeps every part redacted text. The default location is `~/.antai/logs/`, because antai writes outside `~/.antai` only through approved tool calls, `antai init` and `antai mcp add --project` (deliverable 01, rule 6); the user can pass a path when they want it elsewhere. Retention is the logs folder's 7 days. The file name pattern is an addition to deliverable 04's inventory (F15, F16). Where users send bundles depends on Q1 (public or internal release) and is Q15-5.
+Why one JSON file: it opens in any editor for review, needs no archive library (no native dependencies, NFR-COMP-04) and keeps every part redacted text. The default location is `~/.antai/logs/`, because antai writes outside `~/.antai` only through approved tool calls, `antai init` and `antai mcp add --project` (deliverable 01, section 12, rule 6); the user can pass a path when they want it elsewhere. Retention is the logs folder's 7 days. Deliverable 04 lists the file as F20 in its inventory. Users send bundles to the GitLab project's issues, as the user guide (DLV-DOC-02) says; vulnerabilities go through `SECURITY.md` (DLV-DOC-08).
 
 ### 6.5 Environment information for bug reports
 
@@ -810,16 +811,16 @@ BRD 9 says NFR-PERF-01 to 04 "are measured by a benchmark job in CI"; DLV-VER-08
 
 | NFR | Target | Metric | Official measurement | Breakdown | Fixture |
 |---|---|---|---|---|---|
-| NFR-PERF-01 | Median under 1 s, 10 warm starts, on the CI reference machines and a 4-core, 8 GB, SSD laptop | Wall time from spawning `antai` to the first frame that shows the input prompt with input enabled | Harness spawns the installed bundle in a PTY, waits for the prompt text; one discarded run, then 10; median, p90, minimum, maximum | `startup` line (7.2) against the step budget of deliverable 07, RT-8 | Key in the environment (no first run), no MCP servers, a workspace that needs no trust prompt, 1,000 stored sessions (to show history size does not affect start) |
+| NFR-PERF-01 | Median under 1 s, 10 warm starts, on the CI reference machines and a 4-core, 8 GB, SSD laptop | Wall time from spawning `antai` to the first frame that shows the input prompt with input enabled | Harness spawns the installed bundle in a PTY, waits for the prompt text; one discarded run, then 10; median, p90, minimum, maximum | `startup` line (7.2) against the step budget of deliverable 07, RT-7 (section 10.1) | Key in the environment (no first run), no MCP servers, a workspace that needs no trust prompt, 1,000 stored sessions (to show history size does not affect start) |
 | NFR-PERF-02 | p95 under 50 ms from receiving a token to drawing it, last turn of a 100-turn reference session | For each text delta of turn 100: time from `EVM` receiving the `text-delta` part to `INK` finishing the terminal write of the frame that contains it | Internal timestamps on one clock, reported as `renderLatencyMs` (p50, p95, maximum) in `turn-perf`; cross-checked by the harness from the mock model's emit times and the PTY's byte arrival times | Event-loop delay p99 per turn; `EVM` hold-back events | 100-turn reference session (NFR-PERF-04); the mock model streams 300 deltas at 20 ms intervals in each answer |
 | NFR-PERF-03 | `/history` opens in under 200 ms with 1,000 sessions | From Enter on `/history` to the frame that shows the list | Harness, PTY-side | `history-open` line: index read, folder listing, reconciliation, render | 1,000 generated sessions with deliverable 04's sizes and a valid index; a missing-index variant is reported without a target |
 | NFR-PERF-04 | RSS under 300 MB in the 100-turn reference session | Maximum resident memory over the session | The larger of: `process.memoryUsage.rss()` after every turn (`turn-perf`), and the harness's external sample every second (`ps -o rss=` on macOS and Linux, the process working set on Windows) | `heapUsed` per turn | Each turn reads a 2,000-line file and runs one command printing 30,000 characters, as NFR-PERF-04 states |
 
-The benchmarks run the test build, which differs from the release bundle only by the `mock:` provider compiled in (deliverable 07, RT-D18); the model is scripted so that provider latency is not measured.
+The benchmarks run the test build, which differs from the release bundle only by the `mock:` provider compiled in (deliverable 07, RT-D17); the model is scripted so that provider latency is not measured.
 
 ### 7.2 Built-in timing
 
-`perf` lines are written when the `perf` category is on. The benchmark uses `ANTAI_DEBUG=perf` (or `--debug` before OBS-P1 is accepted), so other categories add no overhead to the measurement.
+`perf` lines are written when the `perf` category is on. The benchmark uses `ANTAI_DEBUG=perf` (OBS-P1), so other categories add no overhead to the measurement.
 
 | Line | When | Fields (ms unless stated) |
 |---|---|---|
@@ -829,14 +830,14 @@ The benchmarks run the test build, which differs from the release bundle only by
 | `history-open` | `/history` | `index`, `listing`, `reconcile`, `render`, session count |
 | `shutdown` | Exit | Duration of each step of deliverable 07, section 10.3 |
 
-Rules: `performance.mark()` calls are made whether or not logging is on (a few microseconds each) and cleared with `performance.clearMarks()` after the `startup` line, so the timeline buffer does not grow. The event-loop histogram (`monitorEventLoopDelay()`) runs only with debug on (deliverable 07, section 2.3). How `INK` learns that a frame has been written is unverified for Ink 8 (Q15-10); the default is to time the write in a wrapped stdout stream.
+Rules: `performance.mark()` calls are made whether or not logging is on (a few microseconds each) and cleared with `performance.clearMarks()` after the `startup` line, so the timeline buffer does not grow. The event-loop histogram (`monitorEventLoopDelay()`) runs only with debug on (deliverable 07, section 2.3). `INK` learns that a frame has been written by timing the write in a wrapped stdout stream, cross-checked from the PTY side; whether Ink 8 offers a render callback instead is to be confirmed in the P0 spike.
 
-Component budgets with no BRD target, proposed here so that a regression is visible before it reaches a user-facing number; P0 confirms or replaces them (Q15-16):
+Component budgets with no BRD target, proposed here so that a regression is visible before it reaches a user-facing number; the P0 spike confirms or replaces them:
 
 | Measurement | Proposed budget | Why it matters |
 |---|---|---|
 | Classifier per command, warm (p95 over the 300-command table) | 5 ms | Runs before every `shell` call |
-| Bash parser WASM load | 150 ms, after the first frame | Must not move into the start-up path (deliverable 07, RT-D16) |
+| Bash parser WASM load | 150 ms, after the first frame | Must not move into the start-up path (deliverable 07, RT-D15) |
 | Redaction of a 30,000-character output | 10 ms | Runs on every tool output |
 | antai's share of first-token latency (submit to request sent) | 50 ms | The part of "time to first token" that antai controls |
 | `.env` scan of a 10,000-file workspace | Reported, no budget | Tool output waits for it (deliverable 01, HLD-D21) |
@@ -865,7 +866,7 @@ flowchart LR
     class CI,REP ui
 ```
 
-The harness lives in `test/bench/` (deliverable 16 lists the folder) and uses the PTY runner chosen for interactive tests (dev dependency, Q01-17). Deliverable 14 owns the test cases; this document owns the metrics and the report.
+The harness lives in `test/bench/` (deliverable 16 lists the folder) and uses the dev-only pseudo-terminal package that deliverable 14 chooses for its nightly smoke set. Deliverable 14 owns the test cases; this document owns the metrics and the report.
 
 ### 7.4 Performance report (DLV-VER-08)
 
@@ -880,18 +881,18 @@ The harness lives in `test/bench/` (deliverable 16 lists the folder) and uses th
 | Breakdown | Start-up steps against deliverable 07's budget; component budgets of 7.2 |
 | Debug overhead | `ANTAI_DEBUG=perf` and full `--debug` compared with logging off (information only) |
 | Trend | Change against the previous report and the P0 baseline |
-| Deviations | Each miss with cause, owner and decision; a missed target blocks the P6 exit, which requires every NFR to pass (DELIVERABLES_1, phase table) |
+| Deviations | Each miss with cause, owner and decision; a missed target blocks the P6 exit, which requires every NFR to pass (deliverable 00, section 4) |
 
 ### 7.5 Benchmarks in CI
 
 | When | What | Gate |
 |---|---|---|
-| Every merge request | Deterministic checks only: entry-chunk size budget and lazy-chunk boundaries (Ink, providers, MCP, parser and tokenizer out of the entry chunk, deliverable 07 RT-D16), bundle size | Fails the merge request (deliverable 16 owns the job) |
-| Nightly on the main branch | Full harness on the macOS, Linux and Windows runners (Q4); results JSON kept as artefacts | A metric more than 20 % worse than the last baseline opens a warning; no merge is blocked |
+| Every merge request | Deterministic checks only: entry-chunk size budget and lazy-chunk boundaries (Ink, providers, MCP, parser and tokenizer out of the entry chunk, deliverable 07 RT-D15), bundle size | Fails the merge request (deliverable 16 owns the job) |
+| Nightly on the main branch | Full harness on the macOS, Linux and Windows runners; results JSON kept as artefacts | A metric more than 10 % worse than the last accepted gate baseline opens a severity 3 defect, a missed target severity 2 (deliverable 14, QA-D28); no merge is blocked |
 | Each release candidate | Full harness on the three OSes | A missed NFR-PERF target fails the candidate |
 | P6, once | The stated laptop and one stated machine per OS, by hand with the same harness | Recorded in DLV-VER-08 |
 
-Shared CI runners are noisy, so timing results there show trends; the report's numbers come from stated machines (Q15-11).
+Shared CI runners are noisy, so timing results there show trends; the report's numbers come from stated machines.
 
 ---
 
@@ -903,13 +904,13 @@ The codes and their precedence are deliverable 11, section 12. What a CI job sho
 
 | Code | Meaning | Suggested handling |
 |---|---|---|
-| 0 | Done, no denied action | Continue |
+| 0 | Done, no approvable call denied | Continue |
 | 1 | Internal error; a crash report path is on stderr | Fail; keep `~/.antai/logs/` as an artefact (8.4) |
 | 2 | Usage or config error (bad flag, missing key, invalid model) | Fail; fix the job definition |
 | 3 | Provider error | Read the NDJSON `error` line: when `retryable` is true or `retryAt` is set, retry the job later; otherwise fail |
 | 4 | Step cap reached | Fail or raise `maxSteps`; split the task |
-| 5 | Finished, at least one action denied | Inspect the `approval` lines; either accept (allowed exit code) or change the mode or allowlist |
-| 129, 130, 143 | Ended by SIGHUP, SIGINT or SIGTERM (pending BRD review, IC-P1) | Treat as cancelled |
+| 5 | Finished, at least one approvable call denied (deliverable 11, IC-P2) | Inspect the `approval` lines; either accept (allowed exit code) or change the mode or allowlist |
+| 129, 130, 143 | Ended by SIGHUP, SIGINT or SIGTERM (beyond the BRD, deliverable 11, IC-P1) | Treat as cancelled |
 
 ### 8.2 NDJSON as a monitoring feed
 
@@ -919,7 +920,7 @@ The codes and their precedence are deliverable 11, section 12. What a CI job sho
 | Was anything blocked? | `approval` lines with `decision: "denied"` and their `by` and `rule`; `done.denials` |
 | What ran, and did it work? | `tool-call` and `tool-result` pairs: `status`, `exitCode`, `durationMs` |
 | How many tokens? | `usage` per turn; `done.tokens` |
-| Quota or outage? | `error.code` (for example `PROVIDER_QUOTA_DAILY`), `retryable`, `retryAt`, `provider` |
+| Quota or outage? | `error.code` (for example `provider.quota_daily`), `retryable`, `retryAt`, `provider` |
 | How long? | `done.durationMs` |
 
 ```sh
@@ -931,15 +932,15 @@ jq -r 'select(.type=="done") | .tokens.total' antai.ndjson
 jq -r 'select(.type=="error" and .retryable==false and .retryAt!=null) | .retryAt' antai.ndjson
 ```
 
-Not in NDJSON 1.0: notices, scheduled retries, MCP failures and drift, rate-limit snapshots. They go to stderr as text (deliverable 11, section 5.7; Q11-5 default). For monitoring, a 1.1 minor version should add a `notice` type (deliverable 11, IC-P6), a `retry` type carrying `attempt`, `at` and `reason`, and an optional `rateLimit` object on `usage`; all three are additive under deliverable 11, section 5.6.
+NDJSON 1.0 carries notices, MCP failures and drift as `notice` lines (deliverable 11, IC-P6). Not in NDJSON 1.0: scheduled retries and rate-limit snapshots. Retries go to stderr as text (deliverable 11, section 5.7). For monitoring, a 1.1 minor version should add a `retry` type carrying `attempt`, `at` and `reason`, and an optional `rateLimit` object on `usage`; both are additive under deliverable 11, section 5.6.
 
 ### 8.3 stderr conventions
 
 | Rule | Detail |
 |---|---|
 | Separation | With `--json`, stdout holds only NDJSON; every human-readable line goes to stderr (FR-UI-06, deliverable 11 IC-D9). Without `--json` in a pipe, the answer text goes to stdout and the rest to stderr |
-| One line per event | An error is one line plus its next step; a notice, a scheduled retry ("retrying in 23s · attempt 2/5"), an MCP failure, a drift warning, the debug log path and the crash report path are one line each |
-| Level word first | Each line starts with `error:`, `warning:`, `info:` or `retry:`, so `grep '^error:'` works in CI logs. This is a style rule proposed for deliverable 12 (Q15-15), not part of the public contract (deliverable 11, section 5.1) |
+| One line per event | An error is one line plus its next step; a notice, a scheduled retry ("retrying in 23s (attempt 2/5)"), an MCP failure, a drift warning, the debug log path and the crash report path are one line each |
+| Prefix and level word | Each line starts with `antai: `; errors, warnings and retries then carry a level word (`error:`, `warning:`, `retry:`), so `grep '^antai: error:'` works in CI logs. Deliverable 13, section 11.1 draws the lines. This is a style rule, not part of the public contract (deliverable 11, section 5.1) |
 | Plain | No colour when stderr is not a terminal (FR-UI-07); no spinners, no carriage-return updates; a countdown is one line per scheduled retry (deliverable 09, section 8.7) |
 | Safe | Text passes `RED`; never a stack trace, provider body or NDJSON |
 
@@ -950,9 +951,9 @@ A GitLab job that keeps the evidence when something goes wrong (the `allow_failu
 ```yaml
 antai-review:
   variables:
-    ANTAI_DEBUG: "provider,mcp,tool,safety"   # proposed (OBS-P1); otherwise add --debug
+    ANTAI_DEBUG: "provider,mcp,tool,safety"   # beyond the BRD (OBS-P1)
   script:
-    - antai doctor --json > antai-doctor.json   # proposed (OBS-P4)
+    - antai doctor --json > antai-doctor.json   # beyond the BRD (OBS-P4)
     - git diff origin/main... | antai run "review this diff for bugs" --json > antai.ndjson
   after_script:
     - mkdir -p antai-evidence && cp -r ~/.antai/logs ~/.antai/audit antai-evidence/ || true
@@ -1014,6 +1015,8 @@ Data classes are deliverable 05's: `CNV` conversation (prompts, model text, tool
 
 No new component. New module: `src/bootstrap/diagnostics/` (part of `BOOT`).
 
+Module paths are deliverable 01's (section 8.1), which maps them to the boxes of HLD.png (deliverable 01, section 1.3). Most of the work sits in HLD.png's folders: the debug log, audit log and retention sweep in `infra/` beside `infra/history`, because they are disk adapters like it; usage in `session/`; the retry wrapper in `providers/`; diagnostics in `bootstrap/`, because `antai doctor` is a start-up that reads what the Boot Service reads but builds no session. Three of the folders used here are not drawn in HLD.png (deliverable 01, section 1.3 also covers `rules/`): `cli/` (arguments and subcommands such as `antai audit`, which run without a session), `sdk/` (the one place that imports new AI SDK APIs, so an SDK change touches one folder) and `shared/` (error and message texts every box uses).
+
 | Component | Work defined here | Module | Phase |
 |---|---|---|---|
 | `DBG` | Logger core (guard, serialiser registry, `RED`, queue, writer, rotation), categories, `debug-start` and `debug-end`, breadcrumb ring, crash report fields, bundle writer | `src/infra/log/` | P1: crash reports, breadcrumbs, and the logger core as a developer aid. P4: debug log accepted (FR-ERR-03), content mode |
@@ -1031,7 +1034,7 @@ No new component. New module: `src/bootstrap/diagnostics/` (part of `BOOT`).
 | `RET` | 7-day sweep also covers `report-*.json` | `src/infra/retention/` | P4 |
 | Harness | `test/bench/` | Test code | P6; baseline in P0 |
 
-The register places FR-ERR-03 in P4 (DELIVERABLES_1, phase table) and deliverable 01 ships the debug log with `DBG` in P4. Building the logger core in P1 changes no acceptance step: it gives developers logs while P1 to P3 are built, and FR-ERR-03 is still accepted at P4.
+The register places FR-ERR-03 in P4 (deliverable 00, section 9.1) and deliverable 01 ships the debug log with `DBG` in P4. Building the logger core in P1 changes no acceptance step: it gives developers logs while P1 to P3 are built, and FR-ERR-03 is still accepted at P4.
 
 ---
 
@@ -1039,57 +1042,59 @@ The register places FR-ERR-03 in P4 (DELIVERABLES_1, phase table) and deliverabl
 
 | ID | Decision | Reason | Alternative rejected |
 |---|---|---|---|
-| OBS-D1 | Every signal is local; antai has no telemetry, analytics, update check or upload, and no code path that sends a log or report | NFR-PRIV-01; comparable agents enable analytics by default (research E 5.2), so this promise needs a design that cannot break it | An opt-in crash or feedback upload (Codex `/feedback`) |
-| OBS-D2 | The debug log is switched on only by `--debug` or `ANTAI_DEBUG` (pending BRD review, OBS-P1); no config key, no `/debug` | A log never stays on by accident; `antai --continue --debug` resumes a session with logging | `debug: true` in config; a `/debug` command |
+| OBS-D1 | Every signal is local; antai has no telemetry, analytics, update check or upload, and no code path that sends a log or report | NFR-PRIV-01 forbids any upload; a dependency or a later change could add one unnoticed, so this promise needs a design that cannot break it and a test that proves it | An opt-in crash or feedback upload |
+| OBS-D2 | The debug log is switched on only by `--debug` or `ANTAI_DEBUG` (beyond the BRD, OBS-P1); no config key, no `/debug` | A log never stays on by accident; `antai --continue --debug` resumes a session with logging | `debug: true` in config; a `/debug` command |
 | OBS-D3 | All levels are written when a category is on; no level threshold | The file is opt-in, capped and kept 7 days; filtering happens when reading | An `ANTAI_LOG_LEVEL` threshold |
 | OBS-D4 | Eleven categories: deliverable 04's seven plus `session`, `safety`, `process`, `perf` | Each maps to one group of components, so `ANTAI_DEBUG=mcp,oauth` isolates one area | Deliverable 04's seven only |
 | OBS-D5 | Allow-listed serialiser per type; unregistered types logged by name; every string through `RED`; home prefix shown as `~` | A new field cannot leak by default; shared logs do not name the user's account | Logging whole objects and redacting the text |
-| OBS-D6 | Prompts, instructions and model text only with the per-run `--debug-content` flag (pending BRD review, OBS-P2); never from environment or config; tool output never in the debug log | The most sensitive content needs a deliberate act each time; tool output is already in the session file | Content with every `--debug`; an environment switch |
+| OBS-D6 | Prompts, instructions and model text only with the per-run `--debug-content` flag (beyond the BRD, OBS-P2); never from environment or config; tool output never in the debug log | The most sensitive content needs a deliberate act each time; tool output is already in the session file | Content with every `--debug`; an environment switch |
 | OBS-D7 | A private telemetry integration registered only while debug is on; agents set no `telemetry` option; no `@ai-sdk/otel`, no devtools | HLD-D27; with no integration the SDK records nothing | An OpenTelemetry exporter, even to localhost |
 | OBS-D8 | One `O_APPEND` handle per debug file; queued writes never awaited; queue of 2,000 lines or 2 MiB that drops the oldest `debug` lines first; best-effort synchronous flush on crash | No latency added to turns; bounded memory; the last lines before a crash survive | Synchronous logging; an unbounded queue |
 | OBS-D9 | A breadcrumb ring of the last 50 milestones, always kept, written into crash reports | Context for crashes without `--debug`, at a fixed cost of a few kilobytes | Crash reports with a stack trace only |
 | OBS-D10 | Crash reports add origin, `AntaiError` code, memory, renderer and breadcrumbs, leave out the working folder, and are limited to five contained reports per session | Diagnosable reports that cannot fill the disk in a loop | Deliverable 04's minimal field set |
 | OBS-D11 | Error codes are not shown on screen; they are in NDJSON, the audit log, the debug log and `antai doctor` | Screen text stays plain (deliverable 11, section 13.2) while support still gets codes | An error code or reference on every error line |
-| OBS-D12 | `antai audit`, a read-only viewer (pending BRD review, OBS-P3); no `/audit` | Users without `jq`, including on Windows, can answer audit questions; the transcript already covers the current session | `jq` recipes only; a slash command |
+| OBS-D12 | `antai audit`, a read-only viewer (beyond the BRD, OBS-P3); no `/audit` | Users without `jq`, including on Windows, can answer audit questions; the transcript already covers the current session | `jq` recipes only; a slash command |
 | OBS-D13 | Safe reads inside the workspace are not audited | FR-HIS-13's scope; keeps the log readable for the actions that matter | An audit record for every tool call |
-| OBS-D14 | `antai doctor` is read-only, runs no program found on `PATH`, and uses the network only with `--connect`, unauthenticated (pending BRD review, OBS-P4) | Codex's doctor contract (research E 5.4); NFR-PRIV-01 | A doctor that repairs; reachability checks by default |
+| OBS-D14 | `antai doctor` is read-only, runs no program found on `PATH`, and uses the network only with `--connect`, unauthenticated (beyond the BRD, OBS-P4) | A support step must not change the state it describes; NFR-PRIV-01 allows network use only towards configured endpoints, so only when asked | A doctor that repairs; reachability checks by default |
 | OBS-D15 | `antai doctor` exits 0 whenever it produced a report | Matches `antai mcp list`; statuses are in `--json` | Non-zero exit on a failed check |
-| OBS-D16 | The bug-report bundle is one local JSON file in `~/.antai/logs/`, redacted again at creation, with conversation only on an explicit flag and confirmation; never uploaded (pending BRD review, OBS-P5) | The user reviews and shares by hand; no archive library; respects deliverable 01 rule 6 | A zip in the working folder; upload to a support service |
-| OBS-D17 | No cost estimate in v1 | No prices in the catalogue; the default plan is free; stale prices mislead | A list-price estimate as in Claude Code |
+| OBS-D16 | The bug-report bundle is one local JSON file in `~/.antai/logs/`, redacted again at creation, with conversation only on an explicit flag and confirmation; never uploaded (beyond the BRD, OBS-P5) | The user reviews and shares by hand; no archive library; respects deliverable 01, section 12, rule 6 | A zip in the working folder; upload to a support service |
+| OBS-D17 | No cost estimate in v1 | No prices in the catalogue; the default plan is free; stale prices mislead | A list-price estimate from catalogue prices |
 | OBS-D18 | Daily usage is computed on demand from session `usage` records; for Groq, counted as `input − cacheRead + output`; compared with the daily limit only when the observed per-minute limit equals the catalogue's free plan | No new stored data; a paid plan is never compared with free-plan numbers | Usage records in the audit log; a separate usage file |
 | OBS-D19 | The context share is hidden when the window is the 32,000-token fallback | FR-UI-02 says "when known" | Showing a share against an assumed window |
 | OBS-D20 | Rate-limit state appears in the status bar only when low: under 20 % of tokens per minute or 10 % of daily requests | A quiet bar in normal use, a warning before a hard stop | Always showing remaining limits |
 | OBS-D21 | `RateLimitSnapshot` gains optional `limitRequests` and `limitTokens` | `/usage` must show "remaining of limit" | Taking limits from the catalogue, which may not match the user's plan |
-| OBS-D22 | Official NFR-PERF numbers are measured outside the process through a PTY harness on the test build with the `mock:` provider; `perf` lines give the breakdown | The user's experience includes Node start and terminal output; no test hooks in the release bundle (deliverable 07, RT-D18) | Internal timers only |
+| OBS-D22 | Official NFR-PERF numbers are measured outside the process through a PTY harness on the test build with the `mock:` provider; `perf` lines give the breakdown | The user's experience includes Node start and terminal output; no test hooks in the release bundle (deliverable 07, RT-D17) | Internal timers only |
 | OBS-D23 | Full benchmarks nightly and per release candidate on three OSes; per merge request only deterministic size checks | Shared runners are noisy; size budgets are stable and catch most start-up regressions | Timing gates on every merge request |
-| OBS-D24 | NDJSON 1.0 keeps the seven BRD types (Q11-5 default); `notice`, `retry` and `usage.rateLimit` are recommended for 1.1 | Additive later without breaking scripts; CI monitoring benefits | Adding them to 1.0 |
-| OBS-D25 | stderr lines start with a level word (`error:`, `warning:`, `info:`, `retry:`) and carry no colour or animation when not a terminal | CI logs become greppable; not a contract | Free-form stderr text |
+| OBS-D24 | NDJSON 1.0 has the seven BRD types plus `notice` (deliverable 11, IC-P6); `retry` and `usage.rateLimit` are recommended for 1.1 | Additive later without breaking scripts; CI monitoring benefits | Adding them to 1.0 |
+| OBS-D25 | stderr lines start with `antai: `, then a level word for errors, warnings and retries (`error:`, `warning:`, `retry:`), and carry no colour or animation when not a terminal | CI logs become greppable; not a contract | Free-form stderr text |
 | OBS-D26 | The logger core and crash reports ship in P1; FR-ERR-03 is still accepted in P4 | Developers need logs from the first phase; the acceptance plan is unchanged | Building the logger only in P4 |
 
 ---
 
 ## 12. Open questions
 
+No answer is expected soon. Each row's default is what this document uses; nothing here waits on an answer.
+
 | ID | Question | Options | Default assumed | Owner |
 |---|---|---|---|---|
-| Q15-1 | [USER] Add `ANTAI_DEBUG` with an optional category list (OBS-P1)? | Add; `--debug` only | Add | Daksh, BRD review |
-| Q15-2 | [USER] Add `--debug-content` for prompts and model text in the debug log (OBS-P2)? | Flag only; environment variable as well; never log content | Flag only | Daksh, BRD review |
-| Q15-3 | [USER] Add `antai audit` (OBS-P3)? | Subcommand; `/audit` slash command; documented `jq` recipes only | Subcommand (Should, P4) plus recipes | Daksh, BRD review |
-| Q15-4 | [USER] Add `antai doctor` and its `--bundle` (OBS-P4, OBS-P5)? | Both; doctor only; neither | Both, Should: doctor in P4, bundle in P6 | Daksh, BRD review |
-| Q15-5 | [USER] Where do users send bug reports and bundles? | Issues in the GitLab project; an internal support channel; a public tracker if Q1 makes antai public | GitLab project issues, named in DLV-DOC-02; vulnerabilities through `SECURITY.md` (DLV-DOC-08) | Daksh, with Q1 |
-| Q15-6 | Does `recordInputs: false` in `telemetry` remove the prompt from the events a registered integration receives in `ai@7.0.137` (unverified)? | Yes: `AG` sets it when content is off; no: allow-list only | Allow-list only | P0 spike |
-| Q15-7 | What are the exact field names of the telemetry events (`LanguageModelCallEndEvent.performance` and the others) in `ai@7.0.137`? | As in research F 6.2; different | As in research F 6.2 | P0 spike |
+| Q15-1 | [USER] Add `ANTAI_DEBUG` with an optional category list (OBS-P1)? | Add; `--debug` only | Add | Daksh |
+| Q15-2 | [USER] Add `--debug-content` for prompts and model text in the debug log (OBS-P2)? | Flag only; environment variable as well; never log content | Flag only | Daksh |
+| Q15-3 | [USER] Add `antai audit` (OBS-P3)? | Subcommand; `/audit` slash command; documented `jq` recipes only | Subcommand (Should, P4) plus recipes | Daksh |
+| Q15-4 | [USER] Add `antai doctor` and its `--bundle` (OBS-P4, OBS-P5)? | Both; doctor only; neither | Both, Should: doctor in P4, bundle in P6 | Daksh |
+| Q15-5 | [USER] Where do users send bug reports and bundles? | Issues in the GitLab project; an internal support channel; a public tracker if antai is published publicly | GitLab project issues, named in DLV-DOC-02; vulnerabilities through `SECURITY.md` (DLV-DOC-08) | Daksh |
+| Q15-6 | Does `recordInputs: false` in `telemetry` remove the prompt from the events a registered integration receives in `ai@7.0.137` (to be confirmed in the P0 spike)? | Yes: `AG` sets it when content is off; no: allow-list only | Allow-list only | P0 spike |
+| Q15-7 | What are the exact field names of the telemetry events (`LanguageModelCallEndEvent.performance` and the others) in `ai@7.0.137`? | As written in section 3.9; different | As written in section 3.9 | P0 spike |
 | Q15-8 | [USER] Show a cost estimate in a later version? | Never; catalogue prices in v1.1; user-supplied prices in config | Revisit after v1 | Daksh |
 | Q15-9 | Add optional `limitRequests` and `limitTokens` to `RateLimitSnapshot`? | Add; read limits from the catalogue | Add (additive) | Deliverable 11 |
-| Q15-10 | How does `INK` learn that the frame containing a delta has been written, for NFR-PERF-02 (Ink 8 API unverified)? | Ink render callback; wrapped stdout timing the write; PTY-side timing only | Wrapped stdout, cross-checked from the PTY | P0 spike, deliverable 14 |
-| Q15-11 | Are the CI runners (Q4) stable enough for official NFR-PERF-01 and 02 numbers? | CI numbers official; stated machines; manual runs only | CI for trends, stated machines for the report | DevOps, tech lead |
+| Q15-10 | How does `INK` learn that the frame containing a delta has been written, for NFR-PERF-02 (Ink 8 API to be confirmed in the P0 spike)? | Ink render callback; wrapped stdout timing the write; PTY-side timing only | Wrapped stdout, cross-checked from the PTY | P0 spike, deliverable 14 |
+| Q15-11 | Are the CI runners stable enough for official NFR-PERF-01 and 02 numbers? | CI numbers official; stated machines; manual runs only | CI for trends, stated machines for the report | DevOps, tech lead |
 | Q15-12 | [USER] Should `/usage` "Today" include `--no-history` sessions, which needs a per-turn usage record in the audit log? | No; yes | No | Daksh |
 | Q15-13 | [USER] Should Safe reads inside the workspace be audited? | No; yes | No (OBS-D13) | Daksh |
 | Q15-14 | Status-bar thresholds for rate-limit warnings? | 20 % tokens per minute and 10 % daily requests; other values; always shown | 20 % and 10 % | Deliverable 13 |
 | Q15-15 | Adopt level words at the start of stderr lines? | Adopt; free text | Adopt | Deliverable 12 |
 | Q15-16 | Component budgets: classifier p95 5 ms, parser WASM load 150 ms, redaction of 30,000 characters 10 ms, antai's share of first-token latency 50 ms? | These; values from P0 measurements | These until P0 measures | P0 spike |
 
-Questions from earlier deliverables used here unchanged: Q01-17 (PTY runner for interactive tests), Q04-8 (concurrent audit appends), Q07-7 (contained internal errors), Q11-5 (NDJSON types), Q1 and Q4 (register).
+Defaults from earlier deliverables that this document uses as decided: a dev-only pseudo-terminal package for interactive smoke tests (deliverable 14); concurrent single-write audit appends without a lock (deliverable 04, DS-D13); contained internal errors (deliverable 07, RT-D13); NDJSON 1.0 with the seven BRD types plus `notice` (deliverable 11, IC-P6); CI runners on macOS, Linux and Windows (deliverable 00, section 4).
 
 ---
 
@@ -1099,12 +1104,12 @@ Questions from earlier deliverables used here unchanged: Q01-17 (PTY runner for 
 |---|---|
 | G2, D26, FR-HIS-13, FR-SH-10 | 2.2, 4, 9.1 |
 | FR-CLI-02, FR-CLI-04 (`--debug`, `--json`) | 3.1, 8 |
-| FR-CLI-05 (subcommands; `antai audit`, `antai doctor` proposed) | 4.4, 6.3, 6.4 |
+| FR-CLI-05 (subcommands; `antai audit`, `antai doctor` beyond the BRD) | 4.4, 6.3, 6.4 |
 | FR-ERR-01 | 6.1 |
-| FR-ERR-02, A-C7 | 5.5, 6.1, 8.1 |
+| FR-ERR-02 | 5.5, 6.1, 8.1 |
 | FR-ERR-03 | 3, 9.3, 10 |
 | FR-ERR-04 | 3.3, 6.2 |
-| FR-UI-02, R-X6 | 5.4 |
+| FR-UI-02 | 5.4 |
 | FR-UI-06, AC-20 | 8 |
 | FR-UI-07 | 6.3, 8.3 |
 | BRD 5.11 `/usage` | 5.3 |
@@ -1124,29 +1129,13 @@ Questions from earlier deliverables used here unchanged: Q01-17 (PTY runner for 
 | DLV-VER-08, DLV-PLN-02 | 7.4, 7.5 |
 | DLV-DOC-02 | 3.12, 4.4 |
 | HLD-D27, deliverable 01 section 10.7 | 3.3, 3.9, 3.10 |
+| HLD.png (module placement) | 10 |
 | Deliverable 04 P3, P7, P9; DS-D13, DS-D14, DS-D24 | 3.8, 4.5 |
-| Deliverable 07 RT-D14, RT-D18, Q07-7 | 6.2, 7.1 |
-| Deliverable 11 IC-P1, IC-P6, Q11-5 | 8.1, 8.2 |
+| Deliverable 07 RT-D13, RT-D17 | 6.2, 7.1 |
+| Deliverable 11 IC-P1, IC-P6 | 8.1, 8.2 |
 
 ---
 
 ## 14. Sources
 
-Research notes (checked 12 and 13 October 2026), which carry the full source lists:
-
-- Research E, sections 4.5, 5 and 6: logs, telemetry defaults, usage and cost display, `doctor` and bug-report designs, and error message style in Codex, Gemini CLI, OpenCode and Claude Code.
-- Research F, sections 5 and 6: AI SDK v7 usage shape, `telemetry` options, `registerTelemetry`, callback names, `@ai-sdk/otel` and `@ai-sdk/devtools`; Groq token accounting.
-
-Primary sources used directly:
-
-- AI SDK v7 type definitions: https://unpkg.com/ai@7.0.137/dist/index.d.ts
-- AI SDK v7 migration guide (telemetry moved to `@ai-sdk/otel`): https://ai-sdk.dev/docs/migration-guides/migration-guide-7-0
-- `@ai-sdk/otel` 1.0.137: https://unpkg.com/@ai-sdk/otel@1.0.137/README.md
-- `@ai-sdk/devtools` 1.0.40: https://unpkg.com/@ai-sdk/devtools@1.0.40/README.md
-- Node.js `perf_hooks` (`performance.mark`, `monitorEventLoopDelay`): https://nodejs.org/api/perf_hooks.html
-- Node.js `process.memoryUsage()`: https://nodejs.org/api/process.html#processmemoryusage
-- Codex `doctor`, feedback and log storage: https://github.com/openai/codex/tree/f82e36592278a0a782fb0d0fc97e5fa10e832ac2/codex-rs (`cli/src/doctor.rs`, `feedback`, `state/src/log_db.rs`)
-- Gemini CLI `/bug`, log cleanup and telemetry: https://github.com/google-gemini/gemini-cli/tree/51617c1bcbcb038291125b092501b4342f4e7f77/packages
-- Claude Code costs, debugging, monitoring and errors: https://code.claude.com/docs/en/costs , https://code.claude.com/docs/en/debug-your-config , https://code.claude.com/docs/en/monitoring-usage , https://code.claude.com/docs/en/errors
-- Groq rate limits: https://console.groq.com/docs/rate-limits
-- GitLab CI `allow_failure:exit_codes`: https://docs.gitlab.com/ci/yaml/ (keyword to be confirmed on the git.geekyants.com version)
+External facts in this document (package versions, provider limits, API names) were checked on 12 October 2026 and are stated where they are used; the P0 spike re-checks the ones the design depends on.

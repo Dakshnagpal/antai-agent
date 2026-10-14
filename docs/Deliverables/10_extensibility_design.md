@@ -8,7 +8,8 @@
 | **Version** | 0.1 |
 | **Date** | 12 October 2026 |
 | **Author** | Daksh Nagpal |
-| **Based on** | BRD_1 v0.4, ARCHITECTURE_1 v0.1, DELIVERABLES_1 v0.2, deliverables 01 to 05, research notes B, C, E and F (checked 12 October 2026) |
+| **Based on** | BRD_1 v0.4, HLD.png, deliverables 00 to 05 |
+| **How to use** | Reference design, not a fixed rail. Where the technology needs something different or extra, the implementation may change it; the change is then made in every deliverable it touches, so the set keeps agreeing. |
 
 ## Contents
 
@@ -114,7 +115,7 @@ Three rules hold for every extension:
 
 ### 1.4 Components
 
-All components come from deliverable 01, section 5.9. This document adds none.
+All components come from deliverable 01, section 5.9. This document adds none. In `HLD.png` terms, `INS`, `PRF` and `SKR` sit in the Context box (`context/`), and `IB` is where the Agent Brain (`agent/`) takes in their instructions; `SLASH` is part of Session, `CFG` and `TRUST` of Config, `BT`, `TREG` and `MA` of the Tool Service, `POL` and `PG` of the Safety Guard, and `RED` is the Secret Filter; `MCPM`, `MOA`, `OCB` and `PSV` are Machine Adapters (`infra/`). `SDK` sits in an extra `sdk/` folder so that experimental AI SDK imports stay in one place. Deliverable 01, section 1.3, has the full mapping.
 
 | ID | Role in extensibility |
 |---|---|
@@ -130,23 +131,26 @@ All components come from deliverable 01, section 5.9. This document adds none.
 | `POL`, `PG`, `RED` | Tiers for MCP tools, secret-path checks, redaction of extension text and tool output |
 | `PSV`, `SDK` | Spawn stdio servers; the only importer of `fingerprintTools`, `detectToolDrift` and experimental MCP APIs |
 
-### 1.5 Items pending BRD review used here
+### 1.5 Additions beyond BRD v0.4
+
+These go beyond BRD v0.4. The design uses them as stated; the BRD can adopt them later.
 
 | Ref | What this document assumes | Sections |
 |---|---|---|
-| CR-04 | Skill fields pinned to the agentskills.io six plus the two Claude Code extensions; unknown fields warn | 5.1, 5.6 |
+| CR-04 | Skill fields pinned to the six agentskills.io fields plus `disable-model-invocation` and `user-invocable`; unknown fields warn | 5.1, 5.6 |
 | CR-16 | MCP servers on spec 2026-07-28 and 2025-11-25 both work | 6.7 |
-| A-C10 | `toolSearch` not used in v1 unless the P0 spike shows it is needed | 6.10 |
-| A-C11, A-S11, Q01-16 | Fingerprints from `ai` plus an annotation hash; a changed annotation suspends Safe status from `trustReadOnlyHints` | 6.12 |
-| A-C12, A-C13 | Windows `.cmd` launchers through `cmd.exe /c`; stateless HTTP, `redirect: 'error'` | 6.6 |
-| Deliverable 04, P6 | `mcp.tools.allow` honoured only from global config or a trusted project | 6.3 |
-| EXT-D6 (new) | A skill's identity is its folder name; a missing or different frontmatter `name` warns instead of skipping (Q10-1) | 5.6 |
-| EXT-D7 (new) | In an untrusted folder, project skills and profiles never replace a global or built-in one of the same name (Q10-14) | 2.4 |
-| EXT-D16 (new) | `${VAR:-default}` accepted next to `${VAR}` in `env` and `headers`; `${VAR}` in `command`, `args` or `url` skips the entry (Q10-16) | 6.2 |
-| EXT-D17 (new) | Project MCP files cannot reference provider-key or `ANTAI_*` variables | 6.2 |
-| Deliverable 05, Q05-2, Q05-3, Q05-8, Q05-9 | stdio servers get the scrubbed shell environment plus `env`; literal `headers` and `env` values of 4 or more characters are registered with `RED`; non-loopback `http://` server URLs are refused; OAuth discovery refuses non-`https` and private, loopback or link-local endpoints | 6.1, 6.2, 6.6, 6.13 |
+| Deliverable 01, TD5 | `toolSearch` not used in v1 unless the P0 spike shows it is needed | 6.10 |
+| Deliverable 02, section 8.9 | Fingerprints from `ai` (`fingerprintTools`) plus antai's own annotation hash; a changed definition or annotation suspends Safe status until accepted (now in BRD v0.4, FR-MCP-06) | 6.12 |
+| Deliverable 02, sections 8.3 and 8.4 | Windows `.cmd` launchers through `cmd.exe /c`; stateless Streamable HTTP, `redirect: 'error'` | 6.6 |
+| Deliverable 04, P6 | `mcp.tools.allow` honoured only from global config or a trusted project; now in BRD v0.4 (FR-CFG-04, FR-MCP-06) | 6.3 |
+| EXT-D6 (new) | A skill's identity is its folder name; a missing or different frontmatter `name` warns instead of skipping | 5.6 |
+| EXT-D7 (new) | In an untrusted folder, project skills and profiles never replace a global or built-in one of the same name | 2.4 |
+| EXT-D16 (new) | `${VAR:-default}` accepted next to `${VAR}` in `env` and `headers`; `${VAR}` in `command`, `args` or `url` skips the entry | 6.2 |
+| EXT-D17 | Project MCP files cannot reference provider-key or `ANTAI_*` variables; now in BRD v0.4 (FR-MCP-03) | 6.2 |
+| Deliverable 05, sections 3.6 and 5.4; EXT-D29 | stdio servers get the scrubbed shell environment plus `env`; literal `headers` and `env` values of 4 or more characters are registered with `RED`; non-loopback `http://` server URLs are refused (now in BRD v0.4, FR-MCP-01); OAuth discovery refuses non-`https` and private, loopback or link-local endpoints | 6.1, 6.2, 6.6, 6.13 |
 | EXT-D21 (new) | MCP server fields `enabled`, `startupTimeoutMs`, `toolTimeoutMs` | 6.1 |
-| Q10-4 (new) | `profile` in global config is a default below auto-match | 4.3 |
+| New here | `profile` in global config is a default below auto-match | 4.3 |
+| New here | `mcp.disabledServers` in global config switches named servers off for one user | 6.3, 6.8 |
 
 ---
 
@@ -222,7 +226,7 @@ flowchart LR
     class M2,M3 gated
 ```
 
-Why project wins over global for profiles, skills and servers: the team's shared copy should beat a personal default inside that team's repository, which is the cross-client norm for skills (research C 4.3). Claude Code does the opposite for skills (personal over project); section 9 records the difference. Why `.antai/` wins among project paths: it is antai's own folder, so a team that writes there means it for antai (FR-SKL-02, FR-MCP-02).
+Why project wins over global for profiles, skills and servers: the team's shared copy should beat a personal default inside that team's repository (FR-PRF-01, FR-SKL-02, FR-MCP-02). Tools that rank personal skills first behave differently; section 9 lists the shared skill folders this affects. Why `.antai/` wins among project paths: it is antai's own folder, so a team that writes there means it for antai (FR-SKL-02, FR-MCP-02).
 
 ### 2.3 Scanning rules
 
@@ -242,9 +246,9 @@ Why project wins over global for profiles, skills and servers: the team's shared
 | Several recognised instruction names in one folder | First non-empty of `AGENT.md`, `AGENTS.md`, `CLAUDE.md` (FR-INS-03, section 3.1) | `/instructions` lists the others as skipped |
 | Instruction names that differ only in case (case-sensitive file system) | The all-upper-case name (FR-INS-01); among other spellings, the first in byte order | `/instructions` |
 | Instruction files in different folders | All load in order global, root, deeper folders; later text wins on conflict (FR-AGT-03) | `/instructions` |
-| Profile in `~/.antai/profiles/` and `.antai/profiles/` | Project (FR-PRF-01). In an untrusted folder the global profile is kept and the clash listed (pending BRD review, EXT-D7) | `/profile` |
+| Profile in `~/.antai/profiles/` and `.antai/profiles/` | Project (FR-PRF-01). In an untrusted folder the global profile is kept and the clash listed (beyond the BRD, EXT-D7) | `/profile` |
 | Skill of the same name in several locations | `.antai/skills` › `.agents/skills` › `.claude/skills` › `~/.antai/skills` › built-in (FR-SKL-02, FR-SKL-07) | `/skills` marks the winner "overrides <source>" |
-| Untrusted folder: project skill named like a global or built-in skill | The global or built-in skill (FR-SKL-02; built-in pending BRD review, EXT-D7) | `/skills` lists the clash |
+| Untrusted folder: project skill named like a global or built-in skill | The global or built-in skill (FR-SKL-02; built-in beyond the BRD, EXT-D7) | `/skills` lists the clash |
 | Skill named like a built-in slash command (`help`, `model`, …) | The command, for `/name`. The model can still load the skill (FR-SKL-04) | `/skills` marks it "shadowed for /" |
 | Invalid unit at a higher precedence | Skipped units take no part in precedence; the next valid one loads | Both listed, the invalid one with its reason |
 | Skill and profile with the same name | No relation: separate namespaces | — |
@@ -253,7 +257,7 @@ Why project wins over global for profiles, skills and servers: the team's shared
 | Two tools of one server that sanitise to the same name | The second gets a hash suffix (section 6.9) | `/mcp` tool list |
 | MCP tool versus built-in tool | Cannot happen: every MCP tool starts with `mcp__` (FR-MCP-05) | — |
 
-Why an untrusted project cannot replace a global or built-in unit of the same name: a cloned repository could otherwise swap the user's own `commit-message` skill or `node-dev` profile for a hostile one while the user types the familiar name (review item FR-SKL-02). BRD FR-SKL-02 states this for global skills; this design extends it to built-in skills and to profiles for the same reason.
+Why an untrusted project cannot replace a global or built-in unit of the same name: a cloned repository could otherwise swap the user's own `commit-message` skill or `node-dev` profile for a hostile one while the user types the familiar name. BRD FR-SKL-02 states this for global skills; this design extends it to built-in skills and to profiles for the same reason.
 
 ### 2.5 EXT-3 Trust gating of project extensions
 
@@ -319,9 +323,9 @@ Text loads untrusted because it cannot change approvals, and refusing it would b
 | Skill catalogue | At start | Next start (G5) |
 | Skill body and extra files | At each `load_skill` and `/<skill-name>` | At once |
 | MCP files | At start | Next start; MCP servers are created at start (deliverable 03, SD-D12) |
-| MCP tool list of a server | At connect and at Reconnect in `/mcp` | Next connect; list-change notifications are ignored in v1 (Q10-15) |
+| MCP tool list of a server | At connect and at Reconnect in `/mcp` | Next connect; list-change notifications are ignored in v1 |
 
-Instruction files are re-resolved per turn because `IB` rebuilds the instructions every turn anyway (A-C6) and users edit `AGENTS.md` while they work; the cost is a few folder listings. Everything else is read once, because profiles decide the mode at start, the catalogue should stay stable for prompt caching, and servers are processes. There are no file watchers in v1: they are fragile across three operating systems and the single-process design does not need them (HLD-D1).
+Instruction files are re-resolved per turn because `IB` rebuilds the instructions every turn anyway and users edit `AGENTS.md` while they work; the cost is a few folder listings. Everything else is read once, because profiles decide the mode at start, the catalogue should stay stable for prompt caching, and servers are processes. There are no file watchers in v1: they are fragile across three operating systems and the single-process design does not need them (HLD-D1).
 
 ---
 
@@ -335,7 +339,7 @@ Instruction files are re-resolved per turn because `IB` rebuilds the instruction
 | 2 | `AGENTS.md` | Cross-tool standard (agents.md) |
 | 3 | `CLAUDE.md` | Claude Code |
 
-In each folder antai loads the first of these that exists and is not empty, and lists the others as skipped (FR-INS-03, D14). `Agent.md` counts as `AGENT.md` (FR-INS-01, D5). A file holding only whitespace is treated as absent, so the next name in that folder is used (EXT-D2); this follows Codex's "first non-empty file" rule (research C 5) and avoids an empty `agent.md` silently hiding a team's `CLAUDE.md`. Not recognised: `AGENTS.override.md`, `CLAUDE.local.md`, `GEMINI.md` (section 9).
+In each folder antai loads the first of these that exists and is not empty, and lists the others as skipped (FR-INS-03, D14). `Agent.md` counts as `AGENT.md` (FR-INS-01, D5). A file holding only whitespace is treated as absent, so the next name in that folder is used (EXT-D2), so an empty `agent.md` cannot silently hide a team's `CLAUDE.md`. Not recognised: `AGENTS.override.md`, `CLAUDE.local.md`, `GEMINI.md` (section 9).
 
 ### 3.2 Locations and order
 
@@ -355,16 +359,16 @@ When the workspace is the home folder, `~/AGENT.md` is the root file and `~/.ant
 
 | Limit | Value | Behaviour |
 |---|---|---|
-| Per instruction file | 20 KB (20,480 bytes) default (FR-AGT-03); config key proposed as `context.maxInstructionBytes`, range 1 KB to 100 KB (deliverable 11 confirms) | Cut at the last line break before the cap, or at the cap on a UTF-8 character boundary; a marker line (text in deliverable 08) says how much was cut; one notice per file per session |
+| Per instruction file | 20 KB (20,480 bytes) default (FR-AGT-03); config key `context.maxInstructionBytes`, range 1 KB to 100 KB (deliverable 12, section 8.2) | Cut at the last line break before the cap, or at the cap on a UTF-8 character boundary; a marker line (text in deliverable 08) says how much was cut; one notice per file per session |
 | Profile body | Same cap | Same |
 | Skill body (`load_skill`, `/<skill-name>`) | Same cap (section 5.4) | Same |
-| Total across files | No separate cap in v1 | `INS` reports a token estimate per file; `IB` warns when the total exceeds the budget set in deliverable 08 (Q10-3) |
+| Total across files | No separate cap in v1 | `INS` reports a token estimate per file; `IB` warns when the total exceeds the budget set in deliverable 08 |
 
 20 KB is about 5,000 tokens. On the Groq free plan (8,000 tokens per minute, CR-01) one full file takes most of a minute's budget, so the authoring guide advises a few kilobytes per file and moving procedures into skills (section 8.1).
 
 ### 3.4 No imports or includes
 
-antai has no import syntax in v1. A line such as `@docs/conventions.md` or a Markdown link stays plain text. AGENTS.md defines no include mechanism (research C 5). Claude Code's `@path` imports (Claude Code memory docs; not checked in the research notes) are not supported, because an include would let a project file pull arbitrary paths into every request outside the path guard, and would make the size cap and `/instructions` harder to reason about. The supported pattern is to name the document in the instructions; the model reads it with `read_file` under the normal rules when it needs it.
+antai has no import syntax in v1. A line such as `@docs/conventions.md` or a Markdown link stays plain text, also in a `CLAUDE.md` written for a tool that reads `@path` as an import. Includes are not supported, because an include would let a project file pull arbitrary paths into every request outside the path guard, and would make the size cap and `/instructions` harder to reason about. The supported pattern is to name the document in the instructions; the model reads it with `read_file` under the normal rules when it needs it.
 
 ### 3.5 Encoding and content rules
 
@@ -379,7 +383,7 @@ antai has no import syntax in v1. A line such as `@docs/conventions.md` or a Mar
 
 ### 3.6 How they reach the model
 
-`IB` assembles, in order: antai base rules, global instruction file, active profile, root instruction file, subfolder instruction files, skill catalogue, environment summary (FR-AGT-03). Each file is wrapped with a label giving its source path (relative to the root for project files) and marking it as guidance that cannot change modes or approvals, following research E 3.5. The wrapper text, the token budget and cache placement are deliverable 08's. Instructions are rebuilt every turn and never stored in history (A-C6).
+`IB` assembles, in order: antai base rules, global instruction file, active profile, root instruction file, subfolder instruction files, skill catalogue, environment summary (FR-AGT-03). Each file is wrapped with a label giving its source path (relative to the root for project files) and marking it as guidance that cannot change modes or approvals, so the model can tell project text from antai's own rules. The wrapper text, the token budget and cache placement are deliverable 08's. Instructions are rebuilt every turn and never stored in history.
 
 ### 3.7 `/instructions` and `antai init`
 
@@ -400,7 +404,7 @@ A profile is a session-wide preset: instructions plus optional defaults (FR-PRF-
 | `name` | string | Yes | — | 1 to 64 characters, lowercase `a-z`, `0-9` and single hyphens, no leading or trailing hyphen; must equal the folder name, else the profile is skipped |
 | `description` | string | No (warning when missing) | `""` | At most 1,024 characters; shown in `/profile` and the picker |
 | `match` | string or list of strings | No | `[]` | Up to 20 entries. Each is the name of a file or folder directly in the workspace root; `*` and `?` wildcards allowed; no `/`, no `..`. Compared with the platform's file-name case rules |
-| `mode` | `research`, `manual`, `auto` | No | none | Global profiles: any of the three. Project profiles: `research` or `manual`, trusted folders only (FR-PRF-02, FR-CFG-05). An invalid value fails closed to `research` (FR-CFG-02) |
+| `mode` | `research`, `manual`, `auto` | No | none | Global profiles: `research` or `manual`; `auto` is ignored with a notice (XP-7), because FR-CFG-05 lets only flags, `/mode` and global config set it (deliverable 06, section 7.2). Project profiles: `research` or `manual`, trusted folders only (FR-PRF-02, FR-CFG-05). An invalid value fails closed to `research` (FR-CFG-02) |
 | `model` | string | No | none | `provider:model` or an alias (FR-MOD-03); project profiles: trusted folders only |
 | `effort` | `provider-default`, `none`, `low`, `medium`, `high` | No | none | FR-MOD-06 |
 | `skills` | list of skill names | No | absent = every skill | Narrows the skills the model sees (catalogue and `load_skill`). `[]` = none. Unknown names warn |
@@ -416,7 +420,7 @@ Fields that would grant tools or permissions (`tools`, `allowed-tools`, `mcpServ
 | Skill subset | Yes | Yes | Yes | Replaced |
 | `effort` | Yes | Yes | Yes | Applied from the next turn |
 | `model` | Yes | Ignored, notice | Yes | Applied from the next turn, as `/model` (FR-MOD-05), including the key prompt |
-| `mode` | `research`, `manual`, `auto` | Ignored, notice | `research`, `manual` | Applied only if not looser than the current mode; else a notice to use `/mode` (FR-PRF-03) |
+| `mode` | `research`, `manual` (`auto` ignored, notice) | Ignored, notice | `research`, `manual` | Applied only if not looser than the current mode; else a notice to use `/mode` (FR-PRF-03) |
 | Tools, MCP servers, allow lists, tiers, `--dangerously-skip-permissions` | Never | Never | Never | Never |
 
 "Looser" follows `research` < `manual` < `auto`. At start, profile defaults are one configuration layer: below flags and `ANTAI_*` variables, above project and global config (FR-CFG-01). So `--mode research` beats a profile's `manual`, and a profile's `model` beats `model` in config.
@@ -459,7 +463,7 @@ flowchart TD
 | Resumed session | 2 | FR-HIS-04 restores the last profile; flags given at resume win |
 | Project pin (`"profile"` in `.antai/config.json`) | 3 | Trusted folders only (FR-PRF-03). An unknown or invalid pin gives a notice and no profile; it does not fall back to auto-match, because the team chose a specific profile (EXT-D15) |
 | Auto-match | 4 | Section 4.4 |
-| `"profile"` in global config | 5 | Default when nothing above applies (pending BRD review, Q10-4). BRD 5.8 shows the key but defines it only as a project pin |
+| `"profile"` in global config | 5 | Default when nothing above applies (beyond the BRD, section 1.5). BRD 5.8 shows the key but defines it only as a project pin |
 
 ### 4.4 Auto-match rules
 
@@ -531,7 +535,7 @@ disable-model-invocation: true
 
 | Field | Origin | Type and spec limit | antai behaviour |
 |---|---|---|---|
-| `name` | Spec, required | 1 to 64 characters: `a-z`, `0-9`, hyphens; no leading or trailing hyphen, no `--`; equals the folder name | The skill's identity is its folder name. Missing or different `name`: warning, loaded under the folder name (pending BRD review, EXT-D6) |
+| `name` | Spec, required | 1 to 64 characters: `a-z`, `0-9`, hyphens; no leading or trailing hyphen, no `--`; equals the folder name | The skill's identity is its folder name. Missing or different `name`: warning, loaded under the folder name (beyond the BRD, EXT-D6) |
 | `description` | Spec, required | 1 to 1,024 characters | Missing or empty: skipped. Longer: cut to 1,024 in the catalogue, warning |
 | `license` | Spec | string | Kept; shown in `/skills` |
 | `compatibility` | Spec | 1 to 500 characters | Kept; shown in `/skills`; not evaluated |
@@ -542,9 +546,9 @@ disable-model-invocation: true
 | Other Claude Code fields (`when_to_use`, `argument-hint`, `arguments`, `disallowed-tools`, `model`, `effort`, `context`, `agent`, `background`, `hooks`, `paths`, `shell`) | Claude Code | — | Ignored with a warning "not used by antai". `model`, `effort`, `hooks` and `shell` never take effect: a skill cannot change the session or run code by itself |
 | Anything else | — | — | Ignored with a warning (CR-04) |
 
-Names use the ASCII reading of the spec (`a-z`, `0-9`), matching BRD FR-SKL-01; the reference validator also accepts Unicode letters (research C 4.2), and the conformance tests state antai's choice. Booleans accept YAML `true` and `false`; the strings `"true"` and `"false"` are accepted with a warning; anything else uses the default with a warning. A skill with `disable-model-invocation: true` and `user-invocable: false` can never be used; it is listed with a warning.
+Names use the ASCII reading of the spec (`a-z`, `0-9`), matching BRD FR-SKL-01; the reference validator also accepts Unicode letters, and the conformance tests state antai's choice. Booleans accept YAML `true` and `false`; the strings `"true"` and `"false"` are accepted with a warning; anything else uses the default with a warning. A skill with `disable-model-invocation: true` and `user-invocable: false` can never be used; it is listed with a warning.
 
-The frontmatter is parsed with a safe YAML parser (no custom tags, alias expansion limited; library chosen in P1). If parsing fails, antai retries once with the client guide's fallback that quotes values containing an unquoted colon (research C 4.3), and warns when the fallback was needed.
+The frontmatter is parsed with a safe YAML parser (no custom tags, alias expansion limited; library chosen in P1). If parsing fails, antai retries once with a fallback that quotes values containing an unquoted colon, a common slip in hand-written descriptions, and warns when the fallback was needed.
 
 ### 5.2 Folder resources
 
@@ -559,7 +563,7 @@ release-notes/
 `scripts/`, `references/` and `assets/` are the spec's conventional folders; any layout works. Rules:
 
 - Skill folders are read-only allowed roots for the file tools, also when they sit outside the workspace (FR-TOOL-09). Symbolic links inside a skill folder are resolved; a target outside the skill folder is refused, and a secret path always (FR-SEC-01).
-- Scripts run only through `shell`, under the normal tiers (FR-SKL-01): `python3 scripts/x.py` is Normal, `bash scripts/x.sh` is Dangerous (A-S4), and a path outside the workspace lifts a command to at least Normal (D25). Nothing in a skill pre-approves a command.
+- Scripts run only through `shell`, under the normal tiers (FR-SKL-01): `python3 scripts/x.py` is Normal, `bash scripts/x.sh` is Dangerous, and a path outside the workspace lifts a command to at least Normal (D25). Nothing in a skill pre-approves a command.
 - The model learns the files from the `load_skill` result (section 5.4): relative paths, at most 100 entries, hidden entries and `node_modules` skipped.
 
 ### 5.3 Catalogue entry
@@ -572,7 +576,7 @@ The instructions carry one line per skill: its name and description (FR-SKL-03).
 | Sorted by name | A stable prefix for provider prompt caching |
 | Name and description only, no path | Saves tokens; the path comes with `load_skill` |
 | Descriptions cut at 1,024 characters | Spec limit; bounds a hostile description |
-| No catalogue at all when no skill qualifies, and `load_skill` removed from `activeTools` | The client guide's advice (research C 4.3); no tokens for a tool that cannot succeed (EXT-D8) |
+| No catalogue at all when no skill qualifies, and `load_skill` removed from `activeTools` | No tokens for a list or a tool that cannot succeed (EXT-D8) |
 
 `/skills` shows the catalogue's estimated token size. Twenty skills with 200-character descriptions cost roughly 1,200 tokens per request, which matters on the Groq free plan (CR-01).
 
@@ -608,7 +612,7 @@ sequenceDiagram
 
 | Aspect | Design |
 |---|---|
-| Input | `{ name }`, where `name` is an enum of the catalogue's names (the client guide's suggestion; small models pick valid names more reliably). Rebuilt per turn, so a profile switch updates it (EXT-D8) |
+| Input | `{ name }`, where `name` is an enum of the catalogue's names (small models pick valid names more reliably). Rebuilt per turn, so a profile switch updates it (EXT-D8) |
 | Tier | Safe in every mode, including `research`: it only reads text antai already lists (EXT-D10). No dialog, no audit record (deliverable 04, section 5.9) |
 | Result fields (exact shape: deliverable 12) | `name`, `source` (`built-in`, `global`, or the project path), `folder` (absolute, in the path form used elsewhere for the model, deliverable 08), `instructions` (body), `files` (relative paths), `filesOmitted`, `truncated` |
 | Freshness | The file is read at each call, so an edit applies at once; a file that vanished or became invalid gives a tool error, and `/skills` shows the reason |
@@ -635,18 +639,18 @@ DLV-VER-05 asks for both. They are one `SKR` module with two modes: the strict m
 | `SKILL.md` exists | Error | Folder skipped |
 | Frontmatter present and parseable | Error | Retry with the colon-quoting fallback; then skipped |
 | Folder name follows the name rules | Error | Skipped (it is the skill's identity) |
-| `name` present and equal to the folder name | Error | Warning; folder name used (EXT-D6, Q10-1) |
+| `name` present and equal to the folder name | Error | Warning; folder name used (EXT-D6) |
 | `name` length and characters | Error | Warning |
 | `description` 1 to 1,024 characters | Error | Missing: skipped. Too long: cut, warning |
 | `compatibility` length, `metadata` shape | Error | Warning; field ignored |
-| Fields outside the six spec fields, extensions included | Error (the reference validator rejects them, research C 4.4) | Warning; the two extensions honoured |
+| Fields outside the six spec fields, extensions included | Error (the reference validator rejects them) | Warning; the two extensions honoured |
 | Body over 500 lines or about 5,000 tokens | Warning (spec recommendation) | Cut at 20 KB at load |
 
-The strict mode follows the reference validator `skills-ref` (its `ALLOWED_FIELDS` are the six spec fields); the conformance suite uses fixtures from the `agentskills/agentskills` repository with `skills-ref` as the golden oracle (research C 4.6). Why the loader is lenient on `name`: the agentskills client guide says to warn and load on a name mismatch (research C 4.3), skills arrive from other tools' folders, and using the folder name as identity keeps `/<name>` and `load_skill` unambiguous. BRD FR-SKL-01 says the name "must match", so this is pending BRD review.
+The strict mode follows the reference validator `skills-ref` (its `ALLOWED_FIELDS` are the six spec fields); the conformance suite uses fixtures from the `agentskills/agentskills` repository with `skills-ref` as the golden oracle. Why the loader is lenient on `name`: skills arrive from other tools' folders, where a mismatched `name` is a common and harmless slip, and using the folder name as identity keeps `/<name>` and `load_skill` unambiguous. BRD FR-SKL-01 says the name "must match", so this goes beyond the BRD (section 1.5).
 
 ### 5.7 Built-in skills
 
-Q5's default list is `repo-tour`, `commit-message` and `explain-error` (FR-SKL-07). They live in `src/context/skills/` (deliverable 01, section 8.1), ship in `dist/skills/`, and have the lowest precedence. Each uses only spec fields, so it passes the strict validator, and each has at least one eval task (DLV-SW-10, EXT-D12). They use Safe tools where they can, so they also work in `research` mode, and they read files in line ranges to stay inside the free-plan budget.
+The built-in skills are `repo-tour`, `commit-message` and `explain-error` (FR-SKL-07). They live in `src/context/skills/` (deliverable 01, section 8.1), ship in `dist/skills/`, and have the lowest precedence. Each uses only spec fields, so it passes the strict validator, and each has at least one eval task (DLV-SW-10, EXT-D12). They use Safe tools where they can, so they also work in `research` mode, and they read files in line ranges to stay inside the free-plan budget.
 
 ```yaml
 ---
@@ -690,8 +694,8 @@ All three files share one shape, `{ "mcpServers": { "<name>": { … } } }` (FR-M
 | `type` | `stdio`, `http` (alias `streamable-http`) | `stdio` when `command` is set; `http` when only `url` is set, with a warning | — | `sse`, `ws` and other values: entry skipped with the reason (FR-MCP-02) |
 | `command` | string | — | stdio, required | Resolved on `PATH` (with `PATHEXT` on Windows); no `${VAR}` (section 6.2) |
 | `args` | list of strings | `[]` | stdio | No `${VAR}` (section 6.2) |
-| `env` | map of string to string | `{}` | stdio | Laid over the scrubbed environment that shell commands get (deliverable 05, Q05-2); `${VAR}` allowed (FR-MCP-03) |
-| `url` | string | — | http, required | `https://`, or `http://` to a loopback host only; any other `http://` URL is refused (deliverable 05, Q05-9); no `${VAR}` |
+| `env` | map of string to string | `{}` | stdio | Laid over the scrubbed environment that shell commands get (deliverable 05, section 3.6); `${VAR}` allowed (FR-MCP-03) |
+| `url` | string | — | http, required | `https://`, or `http://` to a loopback host only; any other `http://` URL is refused (FR-MCP-01, EXT-D29); no `${VAR}` |
 | `headers` | map of string to string | `{}` | http | `${VAR}` allowed. An `Authorization` header turns OAuth off for this server (SD-D16). `Content-Type`, `Accept`, `Host` and `Mcp-*` headers are dropped with a warning, because they belong to the protocol |
 | `enabled` | boolean | `true` | both | `false`: listed as disabled, not started (new, EXT-D21) |
 | `startupTimeoutMs` | integer, 1,000 to 300,000 | 30,000 | both | Connect and tool listing must finish in time (new) |
@@ -700,7 +704,7 @@ All three files share one shape, `{ "mcpServers": { "<name>": { … } } }` (FR-M
 | `oauth.clientId` | string | — | http | Pre-registered OAuth client (FR-MCP-11) |
 | `oauth.callbackPort` | integer, 1,024 to 65,535 | OS-assigned | http | Fixed loopback port (deliverable 04, section 5.4) |
 
-Unknown fields warn. The three new fields extend deliverable 04's table in section 5.4. The 30-second start-up default follows Codex's MCP start-up bound (research E 4.4); the tool default matches the shell timeout (FR-SH-07).
+Unknown fields warn. The three new fields extend deliverable 04's table in section 5.4. The 30-second start-up default is long enough for a server that is already installed or cached and short enough that a hung server is reported quickly; the tool default matches the shell timeout (FR-SH-07).
 
 ```jsonc
 // <root>/.antai/mcp.json
@@ -726,25 +730,26 @@ Unknown fields warn. The three new fields extend deliverable 04's table in secti
 
 | Rule | Detail |
 |---|---|
-| Syntax | `${NAME}` and `${NAME:-default}` (the default form pending BRD review, EXT-D16), `NAME` = `[A-Za-z_][A-Za-z0-9_]*`. `$NAME` without braces is literal. No nesting, no escape syntax |
-| Fields | `env` values and `headers` values only (FR-MCP-03; deliverable 05, Q05-2). A `${…}` reference in `command`, `args` or `url` skips that entry with finding XM-31 and the hint to pass the value through `env`. Reason: command lines are visible to other local processes, and a substituted URL could carry a token to a host. Claude Code substitutes in all five fields (research C 3.7), so such `.mcp.json` entries need editing (Q10-16) |
+| Syntax | `${NAME}` and `${NAME:-default}` (the default form beyond the BRD, EXT-D16), `NAME` = `[A-Za-z_][A-Za-z0-9_]*`. `$NAME` without braces is literal. No nesting, no escape syntax |
+| Fields | `env` values and `headers` values only (FR-MCP-03). A `${…}` reference in `command`, `args` or `url` skips that entry with finding XM-31 and the hint to pass the value through `env`. Reason: command lines are visible to other local processes, and a substituted URL could carry a token to a host. A `.mcp.json` entry written for a tool that substitutes in all five fields needs editing (section 9) |
 | Source | antai's process environment at start. Never `.env` files |
-| Missing variable, no default | That server fails with a message naming the variable (FR-MCP-03). Claude Code instead leaves the text and warns; antai fails, so a half-configured token is never sent |
-| Project files | A reference to a provider-key variable (`GROQ_API_KEY` and the others in FR-MOD-04, preset and custom `apiKeyEnv` names, FR-MOD-08) or an `ANTAI_*` variable skips that server (pending BRD review, EXT-D17). A repository must not route antai's own keys to a server it names; Claude Code empties such variables in remote URLs and headers (research C 3.7) |
-| Redaction | Every substituted value is registered with `RED` (FR-MCP-03), and so is every literal value of 4 or more characters in `headers` and `env` (deliverable 05, Q05-3), so a token typed straight into a file is masked too |
+| Missing variable, no default | That server fails with a message naming the variable (FR-MCP-03). antai does not leave the text in place, so a half-configured token is never sent |
+| Project files | A reference to a provider-key variable (`GROQ_API_KEY` and the others in FR-MOD-04, preset and custom `apiKeyEnv` names, FR-MOD-08) or an `ANTAI_*` variable skips that server (FR-MCP-03, EXT-D17). A repository must not route antai's own keys to a server it names |
+| Redaction | Every substituted value is registered with `RED` (FR-MCP-03), and so is every literal value of 4 or more characters in `headers` and `env` (deliverable 05, section 7.1), so a token typed straight into a file is masked too |
 | Trust | The trust prompt lists every referenced name (FR-MCP-03, FR-CFG-04). The trust hash uses the unsubstituted text, so a new token value in the user's environment does not re-ask |
 | Storage | Files keep `${VAR}`; values exist only in memory (deliverable 04, section 5.4) |
 
 ### 6.3 Per-tool allow and deny
 
-Per-tool overrides stay in `config.json`, as in BRD 5.8, not in the MCP files.
+Per-tool overrides, and the user's own switch for a server, stay in `config.json`, as in BRD 5.8, not in the MCP files.
 
 | Key | Effect | Layers |
 |---|---|---|
 | `mcp.tools.deny` | Matching tools are never offered to the model (removed from the tool set) | Combined from every layer, including an untrusted project, because it only tightens |
-| `mcp.tools.allow` | Matching tools are treated as Safe | Global config, flags and environment, or a trusted project (pending BRD review, deliverable 04 P6) |
+| `mcp.tools.allow` | Matching tools are treated as Safe | Global config, flags and environment, or a trusted project (FR-CFG-04, FR-MCP-06) |
+| `mcp.disabledServers` | Listed server names are not started, whichever file defines them; `/mcp` shows them as `disabled` | Global config only: it lets a user switch off a trusted project's server for themselves without editing the shared file |
 
-Patterns match the exposed name (`mcp__<server>__<tool>`); `*` matches any run of characters (FR-MCP-06). `deny` beats `allow`. A pattern that matches no tool of a connected server is reported in `/mcp`. The full tier order is deliverable 02's (SEC-2c): default Normal, an explicit `destructiveHint: true` is Dangerous and wins over `mcp.tools.allow`, `readOnlyHint` counts only with `trustReadOnlyHints`. Deliverable 02 also binds global allow entries to the server identity, so a trusted project server that reuses a global server's name does not inherit them.
+Patterns match the exposed name (`mcp__<server>__<tool>`); `*` matches any run of characters (FR-MCP-06). `deny` beats `allow`. A pattern that matches no tool of a connected server is reported in `/mcp`. The full tier order is deliverable 02's (SEC-2c): default Normal, an explicit `destructiveHint: true` is Dangerous and wins over `mcp.tools.allow`, `readOnlyHint` counts only with `trustReadOnlyHints`, and neither it nor `mcp.tools.allow` makes a tool Safe while a change to its definition or annotations is unaccepted (FR-MCP-06). Deliverable 02 also binds global allow entries to the server identity, so a trusted project server that reuses a global server's name does not inherit them.
 
 ### 6.4 EXT-6 From files to servers
 
@@ -787,7 +792,7 @@ Syntax is in deliverable 12; behaviour (FR-CLI-05, FR-MCP-08, FR-MCP-11):
 | `antai mcp list` | Connects every enabled server (global, and project servers if the workspace is trusted), each bounded by its `startupTimeoutMs`; prints name, transport, source file, status, tool count, protocol version and a next step; closes them. Refreshes expired OAuth tokens as at start; never starts a browser login; never asks for trust |
 | `antai mcp add <name> [--project] [--env K=V] -- <command> [args]` and `… --url <url> [--header "N: v"]` | Validates the name and entry (section 7.6); refuses a name already in the target file; warns when a literal value looks like a token (known formats, or a `*_TOKEN`, `*_KEY`, `*_SECRET` name) and suggests `${VAR}` (FR-MCP-08). Writes with a comment-preserving edit and atomic replace; the global file keeps `mcp.json.bak` (DS-D26). `--project` writes `.antai/mcp.json`, never `.mcp.json`. Does not connect; prints how to check |
 | `antai mcp remove <name> [--project]` | Removes the entry from that file only; a server defined in `.mcp.json` gets a message that antai does not edit that file. Deletes the server's OAuth tokens, its client registration when no other configured server uses the issuer, and its drift baseline when no other server shares the identity (deliverable 04, section 5.5) |
-| `antai mcp login <name>` | Needs a TTY. Only for HTTP servers from the global file or a trusted project, without a configured `Authorization` header (SD-D16); stdio servers take credentials from the environment (MCP spec, research C 3.4). Flow: deliverable 03, SD-21a and SD-21b |
+| `antai mcp login <name>` | Needs a TTY. Only for HTTP servers from the global file or a trusted project, without a configured `Authorization` header (SD-D16); stdio servers take credentials from the environment (MCP spec). Flow: deliverable 03, SD-21a and SD-21b |
 | `antai mcp logout <name>` | Deletes that server's token set (deliverable 04, section 5.5) |
 
 When `antai mcp add --project` runs in a trusted workspace, antai compares the stored trust hash with the hash before the edit. If they are equal (nothing else changed since the user trusted the folder), it stores the hash after the edit, because the user has just approved this server by typing the command. Otherwise it leaves the decision alone and the next start asks again (EXT-D28).
@@ -796,30 +801,30 @@ When `antai mcp add --project` runs in a trusted workspace, antai compares the s
 
 | | stdio | Streamable HTTP |
 |---|---|---|
-| Client | `createMCPClient` with antai's own transport spawned through `PSV` (HLD-D8); fallback `Experimental_StdioMCPTransport` from `@ai-sdk/mcp/mcp-stdio`, wrapped in `SDK` (Q01-2) | `createMCPClient` with `transport: { type: 'http', url, headers, redirect: 'error', fetch, authProvider? }` (research B 7) |
-| Process or connection | Child process tree in the workspace root; environment = the scrubbed environment built for shell commands (deliverable 01, section 10.6) plus the entry's `env` after substitution (deliverable 05, Q05-2) | HTTPS requests (plain HTTP to loopback only); `redirect: 'error'` blocks redirects to other hosts (A-C13); antai's `fetch` wrapper sees 403 challenges and writes redacted debug lines (research F 1.6) |
+| Client | `createMCPClient` with antai's own transport spawned through `PSV` (HLD-D8); fallback `Experimental_StdioMCPTransport` from `@ai-sdk/mcp/mcp-stdio`, wrapped in `SDK` | `createMCPClient` with `transport: { type: 'http', url, headers, redirect: 'error', fetch, authProvider? }` |
+| Process or connection | Child process tree in the workspace root; environment = the scrubbed environment built for shell commands (deliverable 01, section 10.6) plus the entry's `env` after substitution (deliverable 05, section 3.6) | HTTPS requests (plain HTTP to loopback only); `redirect: 'error'` blocks redirects to other hosts; antai's `fetch` wrapper sees 403 challenges and writes redacted debug lines |
 | Credentials | From `env` (MCP spec: stdio implementations take credentials from the environment) | `headers`, or OAuth through `MOA` when no `Authorization` header is configured |
 | Diagnostics | stderr kept in a 200-line ring buffer shown in `/mcp` and written to the debug log, redacted | Last HTTP status and error in `/mcp`; debug log |
-| Windows | A command that resolves to `.cmd` or `.bat` (such as `npx.cmd`) runs as `cmd.exe /c …` with arguments escaped the way `cross-spawn` does (A-C12; Q10-9). antai's own spawn, so the nested-shell rule does not apply | No difference |
-| Close (FR-MCP-10) | Client close, 2-second grace, then `PSV` tree kill | Client close |
+| Windows | A command that resolves to `.cmd` or `.bat` (such as `npx.cmd`) runs as `cmd.exe /c …` with arguments escaped the way `cross-spawn` does (confirmed in the P0 spike); arguments with `cmd.exe` metacharacters are refused (deliverable 02, section 8.3). antai's own spawn, so the nested-shell rule does not apply | No difference |
+| Close (FR-MCP-10) | Client close, end stdin, wait up to 1 s for exit, then `PSV` tree kill (deliverable 07, 7.9) | Client close |
 
-Starting a stdio server runs a program with the user's rights, which is why project servers need trust. A first `npx -y` run downloads the package and can exceed 30 seconds; the timeout message suggests raising `startupTimeoutMs`. For deliverable 05's Q05-11, this design assumes that `npx -y <package>` without a pinned version may contact the npm registry at every start and may pick up a new release (npm behaviour, unverified; checked in P0). The authoring guide therefore recommends a pinned version (`@example/postgres-mcp@1.4.2`) or an installed binary, and a new release that changes tools still shows up as drift (section 6.12).
+Starting a stdio server runs a program with the user's rights, which is why project servers need trust. A first `npx -y` run downloads the package and can exceed 30 seconds; the timeout message suggests raising `startupTimeoutMs`. This design assumes that `npx -y <package>` without a pinned version may contact the npm registry at every start and may pick up a new release (npm behaviour, to be confirmed in the P0 spike). The authoring guide therefore recommends a pinned version (`@example/postgres-mcp@1.4.2`) or an installed binary, and a new release that changes tools still shows up as drift (section 6.12).
 
 ### 6.7 MCP spec versions 2026-07-28 and 2025-11-25
 
-`@ai-sdk/mcp` 2.0.73 is dual-era: it targets 2026-07-28 and falls back to 2025-11-25 (also accepting 2025-06-18, 2025-03-26 and 2024-11-05) (research C 3.5). antai relies on that and shows the negotiated version in `/mcp` (CR-16, A-C13).
+`@ai-sdk/mcp` 2.0.73 is dual-era: it targets 2026-07-28 and falls back to 2025-11-25 (also accepting 2025-06-18, 2025-03-26 and 2024-11-05). antai relies on that and shows the negotiated version in `/mcp` (CR-16).
 
 | Topic | 2026-07-28 | 2025-11-25 | antai |
 |---|---|---|---|
-| Start of a connection | No handshake; `server/discover` | `initialize`, then `notifications/initialized` | The SDK probes `server/discover` and falls back to `initialize`; the spec asks the same on stdio, so this answers Q03-9 (verified in VER-05) |
+| Start of a connection | No handshake; `server/discover` | `initialize`, then `notifications/initialized` | The SDK probes `server/discover` and falls back to `initialize`; the spec asks the same on stdio, so both transports negotiate the same way (verified in VER-05) |
 | Sessions, GET stream, SSE resumability | Removed | `Mcp-Session-Id`, GET stream | Handled by the SDK; antai does not depend on them |
 | Request headers | `Mcp-Method`, `Mcp-Name` required | — | Set by the SDK; config cannot override them (section 6.1) |
 | Authorization | RFC 9207 `iss` validation; credentials keyed by issuer; DCR deprecated | DCR allowed | `MOA` adds the `iss` rule; storage keyed by issuer (deliverable 04, DS-D16) |
 | Roots, sampling, logging | Deprecated | Present | Not declared |
-| Elicitation | Replaced by input-required results | `elicitation/create` | Not declared in v1; a server that needs it gets a tool error (unverified, Q10-8) |
+| Elicitation | Replaced by input-required results | `elicitation/create` | Not declared in v1; a server that needs it gets a tool error (to be confirmed in the P0 spike) |
 | `tools/list` | Deterministic order recommended; `ttlMs` added | — | Fingerprints are per tool, so order does not matter; `ttlMs` ignored |
 
-A client that speaks only 2025-11-25 fails against a server that speaks only 2026-07-28 (research C 3.1), which is why VER-05 tests one server of each era over both transports. Versions older than 2025-11-25 are best effort and untested.
+A client that speaks only 2025-11-25 fails against a server that speaks only 2026-07-28, which is why VER-05 tests one server of each era over both transports. Versions older than 2025-11-25 are best effort and untested.
 
 ### 6.8 EXT-7 Connection lifecycle and `/mcp` status
 
@@ -849,7 +854,7 @@ stateDiagram-v2
 | `connected · 34 tools (3 hidden)` | Ready; "hidden" counts tools removed by `mcp.tools.deny` |
 | `needs login` | `antai mcp login <name>`, or Login in `/mcp` (BRD 4.8) |
 | `failed: <reason>` | Reason from section 7.6 and the fix; Reconnect in `/mcp` |
-| `disabled` | `enabled: false` in `<file>` |
+| `disabled` | `enabled: false` in `<file>`, or listed in `mcp.disabledServers` |
 | `skipped: <reason>` | Invalid or unsupported entry (FR-MCP-02) |
 | `not trusted` | Project server in an untrusted workspace; `/trust` |
 
@@ -858,8 +863,8 @@ stateDiagram-v2
 Timing rules:
 
 - Servers connect in parallel in the background at start; the prompt is never blocked (FR-MCP-04, NFR-PERF-01).
-- A server that connects during a turn adds its tools from the next turn, because each turn's tool set comes from the snapshot (HLD-D2); a one-line notice says so. The first interactive turn does not wait (EXT-D23, Q10-7).
-- `antai run` waits until every enabled server is connected, failed or needs login, each bounded by its `startupTimeoutMs`, before the first step. This answers Q01-9 and implements HLD-D22. A server that needs login is skipped at once with "run antai mcp login <name>" (FR-MCP-11).
+- A server that connects during a turn adds its tools from the next turn, because each turn's tool set comes from the snapshot (HLD-D2); a one-line notice says so. The first interactive turn does not wait (EXT-D23).
+- `antai run` waits until every enabled server is connected, failed or needs login, each bounded by its `startupTimeoutMs`, before the first step. This implements HLD-D22. A server that needs login is skipped at once with "run antai mcp login <name>" (FR-MCP-11).
 - A crashed stdio server is not restarted automatically; Reconnect in `/mcp` starts it again (EXT-D22). This avoids crash loops and keeps a failing server's cost visible.
 
 ### 6.9 EXT-8 Tool naming and limits
@@ -892,7 +897,7 @@ flowchart TD
 | The hash is computed from the original names | The same tool gets the same exposed name in every session, so allow and deny lists and fingerprints keep working |
 | Two servers with the same sanitised prefix: the later one is skipped | Silent renaming would make deny patterns miss tools |
 | The terminal and the audit log use the original server and tool names; only the model sees the exposed name | Readable cards (BRD 4.8 shows `github · list_pull_requests`) |
-| Tool descriptions are cut at 2,000 characters; input schemas are passed as given | Descriptions are untrusted prompt text and cost tokens every step (Q10-13). Schemas that a provider rejects are Q10-12 |
+| Tool descriptions are cut at 2,000 characters; input schemas are passed as given | Descriptions are untrusted prompt text and cost tokens every step. A schema that a provider rejects fails that request, and the error names the tool (section 6.14) |
 
 ### 6.10 Tool count, prompt size and `toolSearch`
 
@@ -901,11 +906,11 @@ Every exposed MCP tool's name, description and schema is sent with every model s
 | Control | Effect |
 |---|---|
 | `mcp.tools.deny` with wildcards | Removes tools from every request |
-| `enabled: false` | Server not started |
+| `enabled: false`, `mcp.disabledServers` | Server not started |
 | Token estimate per server and in total in `/mcp` | The user sees what each server costs |
 | Start-up warning when MCP tool definitions alone exceed the budget in deliverable 08 | Points at the two controls above |
 
-`toolSearch()` (in `ai` since 7.0.104) lets tools marked `deferLoading: true` be found by search and become callable on the next step, and works with MCP tools (research B 9). It is not used in v1 (A-C10, deliverable 01 TD5): the API is a few weeks old, and every discovery changes the tool list and so breaks the cached prompt prefix. If the P0 spike shows that a typical server set does not fit the free plan, the design point is ready: `MA` marks the tools of large servers `deferLoading: true` and `TREG` adds the search tool, both behind `SDK` (Q10-6).
+`toolSearch()` (in `ai` since 7.0.104) lets tools marked `deferLoading: true` be found by search and become callable on the next step, and works with MCP tools. It is not used in v1 (deliverable 01, TD5): the API is a few weeks old, and every discovery changes the tool list and so breaks the cached prompt prefix. If the P0 spike shows that a typical server set does not fit the free plan, the design point is ready: `MA` marks the tools of large servers `deferLoading: true` and `TREG` adds the search tool, both behind `SDK`.
 
 ### 6.11 Tool results
 
@@ -918,7 +923,7 @@ Every exposed MCP tool's name, description and schema is sent with every model s
 | Resource link | `[resource: <uri>]` |
 | `isError: true` | A tool error with the text, so the model can recover (FR-AGT-07) |
 
-Everything then passes `RED` and the 30,000-character head-and-tail cap used for shell output, redacting first (FR-MCP-07, FR-SH-08, A-S6). A call that exceeds `toolTimeoutMs` is aborted and returns a tool error; a stdio server is not killed for one slow call. Esc aborts the call through the turn's abort signal (FR-AGT-04). Each call writes an `mcp-call` event (deliverable 04, section 5.9).
+Everything then passes `RED` and the 30,000-character head-and-tail cap used for shell output, redacting first (FR-MCP-07, FR-SH-08). A call that exceeds `toolTimeoutMs` is aborted and returns a tool error; a stdio server is not killed for one slow call. Esc aborts the call through the turn's abort signal (FR-AGT-04). Each call writes an `mcp-call` event (deliverable 04, section 5.9).
 
 ### 6.12 Drift detection
 
@@ -926,15 +931,15 @@ The flow is deliverable 03, SD-19b; the storage is deliverable 04, section 5.14.
 
 | Aspect | Design |
 |---|---|
-| What is compared | `fingerprintTools` from `ai` (description, input schema and title per tool) through `SDK` (A-C11), plus antai's own `sha256` of each tool's annotations, which the SDK ignores (A-S11) |
+| What is compared | `fingerprintTools` from `ai` (description, input schema and title per tool) through `SDK`, plus antai's own `sha256` of each tool's annotations, which the SDK ignores |
 | Baseline key | Server identity: `http:<canonical URL>` or `stdio:sha256(<command>, <args>)`. A changed command gets a new baseline, but it also changes the trust hash, so a project cannot slip one past the user |
 | First connect | Baseline stored |
 | Change found | `mcp-drift` event; warning at start ("github: 2 tools changed, see /mcp"); `/mcp` shows added, removed and changed tools with a description diff. Tools stay available (D29). In `run`, the warning goes to stderr |
-| Annotation change | The tool loses the Safe treatment from `trustReadOnlyHints` and runs at Normal until accepted (Q01-16 default) |
+| Definition or annotation change | The tool loses Safe, whether from `trustReadOnlyHints` or `mcp.tools.allow`, and runs at Normal until accepted (FR-MCP-06; deliverable 02, section 8.9) |
 | Accept changes in `/mcp` | Replaces the baseline for that server; the warning stops (SD-D18) |
-| Limit | Fingerprints cannot see a behaviour change behind an unchanged definition (research B 7); approvals remain the control |
+| Limit | Fingerprints cannot see a behaviour change behind an unchanged definition; approvals remain the control |
 
-ARCHITECTURE_1 A-S9 proposed re-approval on drift; D29 chose warn-only, and this design follows D29.
+Re-approval of the server on drift was considered; BRD D29 chose warn-only, and this design follows D29.
 
 ### 6.13 OAuth login summary
 
@@ -942,14 +947,14 @@ ARCHITECTURE_1 A-S9 proposed re-approval on drift; D29 chose warn-only, and this
 |---|---|
 | When | An HTTP server with no `Authorization` header answers 401 and no usable token exists: status "needs login" (SD-20) |
 | Who may log in | A human, for a server from the global file or a trusted project (FR-CFG-04, AC-26) |
-| Engine | `@ai-sdk/mcp` performs discovery, PKCE, dynamic client registration, refresh and issuer pinning; antai supplies `MOA` (the `OAuthClientProvider`) and `OCB` (loopback listener on `127.0.0.1` and `::1`, redirect `http://localhost:<port>/callback`, HLD-D26) (research F 1) |
+| Engine | `@ai-sdk/mcp` performs discovery, PKCE, dynamic client registration, refresh and issuer pinning; antai supplies `MOA` (the `OAuthClientProvider`) and `OCB` (loopback listener on `127.0.0.1` and `::1`, redirect `http://localhost:<port>/callback`, HLD-D26) |
 | antai's extra checks | `state`; reject a missing `iss` when the server advertises support; refuse when authorization-server metadata is missing; confirm before a step-up on 403 `insufficient_scope`, at most two attempts (SD-D17); refresh expired tokens at start |
-| Missing metadata (answers Q03-8, default) | The `fetch` wrapper records whether an authorization-server metadata request succeeded in this attempt and the `authorization_endpoint` it gave. `MOA.redirectToAuthorization` refuses unless the URL it receives starts with that endpoint, which rules out the SDK's legacy `/authorize` fallback. P0 confirms against the bundle |
+| Missing metadata | The `fetch` wrapper records whether an authorization-server metadata request succeeded in this attempt and the `authorization_endpoint` it gave. `MOA.redirectToAuthorization` refuses unless the URL it receives starts with that endpoint, which rules out the SDK's legacy `/authorize` fallback. P0 confirms against the bundle |
 | Registration | `oauth.clientId` if set, else dynamic registration with `application_type: native`; no Client ID Metadata Document in v1 (deliverable 01, TD3) |
 | Storage | `credentials.json` (`0600`): token sets by canonical server URL with the issuer pin; client records by issuer (DS-D16) |
 | Non-interactive | `run` skips a server without a valid token with "run antai mcp login <name>" (FR-MCP-11) |
 | Over SSH | antai prints the URL and explains that browser login needs a local session (FR-MCP-11) |
-| Addresses | A non-loopback `http://` server URL is refused before any request (deliverable 05, Q05-9). Discovery refuses authorization-server, metadata and token URLs that are not `https` or that resolve to private, loopback or link-local addresses (deliverable 05, Q05-8). The SDK's own guard allows loopback OAuth endpoints only when the MCP server itself is on loopback (research F 1.2); AC-26's local test server relies on that case, which deliverable 02 must keep (EXT-D29) |
+| Addresses | A non-loopback `http://` server URL is refused before any request (FR-MCP-01). Discovery refuses authorization-server, metadata and token URLs that are not `https` or that resolve to private, loopback or link-local addresses (EXT-D29). The SDK's own guard allows loopback OAuth endpoints only when the MCP server itself is on loopback; AC-26's local test server relies on that case, which deliverable 02 must keep (EXT-D29) |
 
 ### 6.14 Failure isolation
 
@@ -963,12 +968,12 @@ One server's failure never blocks the prompt, never affects other servers, built
 | Server crash or transport closed mid-session | Calls to it return a tool error naming the server and status | `failed`, Reconnect |
 | Tool call timeout or error | One tool error; the turn continues | Tool card |
 | Huge output | Redacted, then capped | Tool card shows the cut |
-| Provider rejects an MCP tool schema | The model request fails for that turn (FR-ERR-01 names the tool when the provider does); the user denies the tool | Error message, Q10-12 |
+| Provider rejects an MCP tool schema | The model request fails for that turn (FR-ERR-01 names the tool when the provider does); the user denies the tool | Error message |
 | Drift | Warning only | `/mcp`, start-up notice |
 
 ### 6.15 What is not in v1
 
-Resources, prompts (Claude Code exposes them as slash commands; antai does not), roots, sampling, logging, elicitation, subscriptions, tasks, MCP Apps, list-change notifications, the HTTP+SSE and WebSocket transports, the server's optional `instructions` text (untrusted and costly; shown in `/mcp` only), device-code login and Client ID Metadata Documents. BRD 5.9 asks only for tools; each of these adds untrusted surface or tokens without a v1 requirement (EXT-D25).
+Resources, prompts (not offered as slash commands), roots, sampling, logging, elicitation, subscriptions, tasks, MCP Apps, list-change notifications, the HTTP+SSE and WebSocket transports, the server's optional `instructions` text (untrusted and costly; shown in `/mcp` only), device-code login and Client ID Metadata Documents. BRD 5.9 asks only for tools; each of these adds untrusted surface or tokens without a v1 requirement (EXT-D25).
 
 ---
 
@@ -1008,7 +1013,7 @@ flowchart LR
 | Start-up notice | One line, for example "2 skills skipped, 1 profile warning, 1 MCP server failed: see /skills, /profile, /mcp" |
 | `/instructions`, `/profile`, `/skills`, `/mcp` | Every finding for that type, with the full message |
 | `antai mcp list` | MCP findings |
-| Plain renderer and `--json` | Warnings as lines on stderr; stdout stays clean. FR-UI-06 has no notice event type; whether one is added is deliverable 11's decision |
+| Plain renderer and `--json` | Warnings as lines on stderr; stdout stays clean in text mode. With `--json` each warning is also a `notice` line (beyond the BRD, deliverable 11, IC-P6) |
 | Debug log | Every finding, redacted (deliverable 15) |
 
 ### 7.3 Instruction file findings
@@ -1037,7 +1042,7 @@ flowchart LR
 | XP-4 | `description` missing | Warning | Add a description so `/profile` can show it |
 | XP-5 | `match` not a list, or an entry with `/` or `..` | Warning | Entry ignored: `match` names entries in the workspace root only |
 | XP-6 | `mode` not a known value | Warning | `mode: fast` is not valid; `research` used (FR-CFG-02) |
-| XP-7 | Project profile sets `mode: auto` | Warning | Project profiles cannot set `auto` (FR-CFG-05); ignored |
+| XP-7 | A profile, global or project, sets `mode: auto` | Warning | Profiles cannot set `auto` (FR-CFG-05); ignored. Use `--mode auto`, `/mode auto` or `mode` in `~/.antai/config.json` |
 | XP-8 | Project profile `mode` or `model` in an untrusted folder | Warning | Ignored until this folder is trusted (`/trust`) |
 | XP-9 | `model` malformed, unknown provider, or no tool calling | Warning | `model` ignored; check `provider:model` (FR-MOD-03, FR-MOD-05) |
 | XP-10 | `effort` invalid | Warning | Ignored; use provider-default, none, low, medium or high |
@@ -1086,14 +1091,14 @@ flowchart LR
 | XM-4 | `type` `sse`, `ws` or unknown | Skipped | Transport `sse` is not supported; use Streamable HTTP (`type: http`) |
 | XM-5 | stdio without `command`; http without `url` | Skipped | `db`: `command` is required |
 | XM-6 | `url` invalid or not `http(s)` | Skipped | `url` is not a valid HTTP URL |
-| XM-7 | `http://` to a non-loopback host | Skipped | Plain `http://` is allowed only for localhost; use `https://` (Q05-9) |
+| XM-7 | `http://` to a non-loopback host | Skipped | Plain `http://` is allowed only for localhost; use `https://` |
 | XM-8 | Server name empty or over 32 characters after sanitising, or same prefix as another server | Skipped | Server name `x` clashes with `x` from `~/.antai/mcp.json` after sanitising |
 | XM-9 | Missing variable | Failed | `github`: environment variable `GITHUB_TOKEN` is not set |
 | XM-10 | Project file references a provider-key or `ANTAI_*` variable | Skipped | Project files cannot use `GROQ_API_KEY` |
 | XM-11 | Protocol header in `headers` | Warning | Header `Mcp-Method` dropped |
 | XM-12 | Timeout outside its range | Warning | Default used |
 | XM-13 | `oauth.*` on a stdio server; unknown field | Warning | Field ignored |
-| XM-14 | `enabled: false` | Info | Disabled in `<file>` |
+| XM-14 | `enabled: false`, or listed in `mcp.disabledServers` | Info | Disabled in `<file>` (or: in `mcp.disabledServers`) |
 | XM-15 | Project file in an untrusted folder | Info | Not trusted: not started (`/trust`) |
 | XM-16 | Overrides an entry in another file | Info | Overrides `github` from `~/.antai/mcp.json` |
 | XM-17 | Command not found | Failed | `command not found: uvx` (BRD 4.8) |
@@ -1111,7 +1116,7 @@ flowchart LR
 | XM-29 | Literal token given to `antai mcp add` | Warning | Store a `${VAR}` reference instead of the token |
 | XM-30 | Tool call timeout | Tool error | `mcp__db__query` timed out after 120 s |
 | XM-31 | `${…}` in `command`, `args` or `url` | Skipped | Variables are substituted only in `env` and `headers`; pass the value through `env` (FR-MCP-03) |
-| XM-32 | OAuth endpoint not `https`, or on a private, loopback or link-local address | Needs login, login refused | The authorization server address is not allowed (Q05-8) |
+| XM-32 | OAuth endpoint not `https`, or on a private, loopback or link-local address | Needs login, login refused | The authorization server address is not allowed |
 
 ---
 
@@ -1197,18 +1202,18 @@ Next week the lead adds a second skill folder. It appears in `/skills` at the ne
 
 | Convention | Origin | antai v1 | Differences |
 |---|---|---|---|
-| `AGENTS.md` in root and folders to the cwd | agents.md (AAIF); Codex | Read | Codex concatenates root to cwd with a 32 KiB total; antai the same order with 20 KB per file. antai prefers `AGENT.md` when both exist in one folder (D14). `AGENTS.override.md` not read |
-| `CLAUDE.md` | Claude Code | Read as the third name per folder | Claude Code reads `AGENTS.md` only without a `CLAUDE.md`; antai the reverse. `CLAUDE.local.md`, `@path` imports and on-demand subfolder files are not supported; `~/.claude/CLAUDE.md` not read |
+| `AGENTS.md` in root and folders to the cwd | Cross-tool convention (agents.md) | Read | Root to cwd, 20 KB per file and no total cap (section 3.3). `AGENT.md` wins when both exist in one folder (D14). `AGENTS.override.md` not read |
+| `CLAUDE.md` | Claude Code | Read as the third name per folder | Used only when the folder has no non-empty `AGENT.md` or `AGENTS.md` (FR-INS-03). `CLAUDE.local.md`, `@path` imports (section 3.4) and on-demand subfolder files are not supported; `~/.claude/CLAUDE.md` not read |
 | `GEMINI.md` | Gemini CLI | Not read | Teams can rename or link it to `AGENTS.md` |
 | `SKILL.md` format | agentskills.io | Read | Six spec fields; unknown fields warn instead of failing |
 | `disable-model-invocation`, `user-invocable` | Claude Code | Honoured | Not spec fields; the strict validator flags them (CR-04) |
 | Other Claude Code skill fields | Claude Code | Ignored with a warning | `model`, `effort`, `hooks`, `shell`, `context`, `agent` never take effect |
-| `<project>/.claude/skills/` | Claude Code; read by opencode and goose too | Read (lowest project precedence) | Claude Code ranks personal over project; antai ranks project over global |
-| `<project>/.agents/skills/` | Cross-client convention; Codex, Gemini CLI, goose | Read at the root only | Codex also walks from the cwd up to the root |
-| `~/.agents/skills/`, `~/.claude/skills/` | Cross-client and Claude Code user folders | Not read (Q10-2) | Copy or link into `~/.antai/skills/` |
-| `.mcp.json` with `mcpServers` | Claude Code project scope | Read, needs trust | `type` `stdio` and `http` (`streamable-http` alias); `sse` and `ws` skipped. `url` without `type` is treated as `http` (Claude Code skips it). A missing variable fails the server (Claude Code keeps the text). Non-loopback `http://` URLs refused. Never written by antai |
-| `${VAR}`, `${VAR:-default}` | Claude Code | Supported in `env` and `headers` only (FR-MCP-03) | Claude Code also substitutes in `command`, `args` and `url`; antai skips such entries with a hint (XM-31). Provider-key and `ANTAI_*` variables refused in project files |
-| Codex `mcp_servers` (TOML), Gemini `settings.json` `mcpServers` | Codex, Gemini CLI | Not read | Copy entries into `mcp.json` |
+| `<project>/.claude/skills/` | Claude Code; read by other tools too | Read (lowest project precedence) | Project ranks over global (section 2.2) |
+| `<project>/.agents/skills/` | Cross-client convention | Read at the root only | Folders between the root and the cwd are not searched (section 2.3) |
+| `~/.agents/skills/`, `~/.claude/skills/` | Cross-client and Claude Code user folders | Not read in v1 | Copy or link into `~/.antai/skills/` |
+| `.mcp.json` with `mcpServers` | Project MCP file of other tools (FR-MCP-02) | Read, needs trust | `type` `stdio` and `http` (`streamable-http` alias); `sse` and `ws` skipped. `url` without `type` is treated as `http` (EXT-D18). A missing variable fails the server (section 6.2). Non-loopback `http://` URLs refused. Never written by antai |
+| `${VAR}`, `${VAR:-default}` | `.mcp.json` files of other tools | Supported in `env` and `headers` only (FR-MCP-03) | An entry that uses them in `command`, `args` or `url` is skipped with a hint (XM-31). Provider-key and `ANTAI_*` variables refused in project files |
+| MCP servers in other tools' own settings files (TOML `mcp_servers`, `settings.json` `mcpServers`) | Other agents | Not read | Copy entries into `mcp.json` |
 | MCP spec 2026-07-28 and 2025-11-25 | MCP | Both (CR-16) | No resources, prompts, sampling, roots or elicitation |
 
 ---
@@ -1217,36 +1222,36 @@ Next week the lead adds a second skill folder. It appears in `/skills` at the ne
 
 | ID | Decision | Reason | Alternative rejected |
 |---|---|---|---|
-| EXT-D1 | Instruction files re-resolved before each turn; profiles, skill catalogue and MCP config read at start | `IB` rebuilds every turn anyway and users edit `AGENTS.md` while working; the rest decide mode, cache prefix or processes | Everything at start only (deliverable 04, section 5.16); file watchers |
-| EXT-D2 | A whitespace-only instruction file counts as absent; the next name in the folder is used | An empty file must not hide the team's real file; Codex uses the first non-empty file | Load the empty file as "first found" |
-| EXT-D3 | No import or include syntax in instruction files | Includes would bypass the path guard and blur the size cap | Claude Code-style `@path` imports |
+| EXT-D1 | Instruction files re-resolved before each turn; profiles, skill catalogue and MCP config read at start | `IB` rebuilds every turn anyway and users edit `AGENTS.md` while working; the rest decide mode, cache prefix or processes | Everything at start only; file watchers |
+| EXT-D2 | A whitespace-only instruction file counts as absent; the next name in the folder is used | An empty file must not hide the team's real file | Load the empty file as "first found" |
+| EXT-D3 | No import or include syntax in instruction files | Includes would bypass the path guard and blur the size cap | `@path` imports |
 | EXT-D4 | Extension files resolved with `realpath`; secret targets refused; project targets outside the workspace refused | Links must not bypass FR-SEC-01 or pull other files into the prompt | Read links as they are |
 | EXT-D5 | Extension text passes `RED` before reaching the model | A token pasted into a shared file is masked like tool output | Trust the author |
-| EXT-D6 | A skill's identity is its folder name; a missing or different `name` warns (pending BRD review) | agentskills client guide; skills arrive from other tools; `/name` stays unambiguous | Skip, as BRD FR-SKL-01 reads |
-| EXT-D7 | Untrusted project skills and profiles never replace a global or built-in one of the same name (pending BRD review) | Stops a cloned repository from swapping the user's familiar unit | BRD as written: skills protect global only, profiles always replaced |
+| EXT-D6 | A skill's identity is its folder name; a missing or different `name` warns (beyond the BRD) | Skills arrive from other tools' folders; `/name` stays unambiguous | Skip, as BRD FR-SKL-01 reads |
+| EXT-D7 | Untrusted project skills and profiles never replace a global or built-in one of the same name (beyond the BRD) | Stops a cloned repository from swapping the user's familiar unit | BRD as written: skills protect global only, profiles always replaced |
 | EXT-D8 | `load_skill` takes an enum of catalogue names and is removed from `activeTools` when the catalogue is empty | Small models pick valid names; no tokens for a useless tool | Free string, always present |
 | EXT-D9 | Skill bodies capped at 20 KB, like instruction files | A body becomes instructions; one cap for one kind of text | The 50 KB `read_file` cap |
 | EXT-D10 | `load_skill` is Safe in every mode, including `research` | It reads text antai already lists; skills are useful for read-only work | Normal tier |
 | EXT-D11 | `antai run "/<skill> …"` expands user-invocable skills | CI can call team playbooks without new flags | Interactive only |
-| EXT-D12 | Built-in skills use only the six spec fields | They pass the strict validator and serve as conformance fixtures | Use the Claude Code extensions |
+| EXT-D12 | Built-in skills use only the six spec fields | They pass the strict validator and serve as conformance fixtures | Use the two extension fields |
 | EXT-D13 | Profile `match` accepts `*` and `?` on root entry names, no paths | Ecosystems such as .NET have no fixed marker file; one folder listing | Exact names only; full globs |
 | EXT-D14 | Unknown `--profile`: error notice interactively, exit code 2 in `run` | A script must not silently run with a different role | Always start; always fail |
 | EXT-D15 | An unknown pinned profile gives no profile, not auto-match | The team chose a specific profile; a guess could load the wrong role | Fall back to auto-match |
-| EXT-D16 | `${VAR}` and `${VAR:-default}` only in `env` and `headers`; a reference elsewhere skips the entry (default form pending BRD review) | FR-MCP-03 and deliverable 05: no secrets in command lines or URLs; the default form helps shared files | Substitute in all five fields as Claude Code does (and SD-19a for args) |
-| EXT-D17 | Project MCP files cannot reference provider-key or `ANTAI_*` variables | A repository must not route antai's keys to a server it names (CR-08 precedent) | Allow with trust |
-| EXT-D18 | `url` without `type` means `http`, with a warning; `streamable-http` accepted | Streamable HTTP is the only remote transport antai has | Skip the entry, as Claude Code does |
+| EXT-D16 | `${VAR}` and `${VAR:-default}` only in `env` and `headers`; a reference elsewhere skips the entry (default form beyond the BRD) | FR-MCP-03 and deliverable 05: no secrets in command lines or URLs; the default form helps shared files | Substitute in all five fields |
+| EXT-D17 | Project MCP files cannot reference provider-key or `ANTAI_*` variables | A repository must not route antai's keys to a server it names (the same reason as CR-08 for provider settings) | Allow with trust |
+| EXT-D18 | `url` without `type` means `http`, with a warning; `streamable-http` accepted | Streamable HTTP is the only remote transport antai has | Skip the entry |
 | EXT-D19 | Server prefixes never contain `__`; a sanitised clash skips the later server | Names stay parseable; deny patterns never miss renamed tools | Hash-suffix server names |
 | EXT-D20 | Over-long tool names: cut plus 8 hex characters of a hash of the original names | Deterministic across sessions for allow lists and fingerprints | Sequential numbers |
 | EXT-D21 | Per-server `enabled`, `startupTimeoutMs` (30 s) and `toolTimeoutMs` (120 s) | Slow `npx` servers and long tools need local control; turning off without deleting | Global timeouts only |
 | EXT-D22 | No automatic restart of a crashed stdio server; Reconnect in `/mcp` | Avoids crash loops and hidden cost | Restart with back-off |
-| EXT-D23 | The first interactive turn does not wait for connecting servers; `run` waits up to each server's start-up timeout (answers Q01-9) | FR-MCP-04 for people; scripts need their tools (HLD-D22) | A fixed global wait |
+| EXT-D23 | The first interactive turn does not wait for connecting servers; `run` waits up to each server's start-up timeout | FR-MCP-04 for people; scripts need their tools (HLD-D22) | A fixed global wait |
 | EXT-D24 | MCP tool descriptions cut at 2,000 characters; server `instructions` not sent to the model | Untrusted text with a token cost every step | Pass as given |
 | EXT-D25 | Resources, prompts, sampling, roots, logging and elicitation not used in v1 | BRD asks for tools only; less untrusted surface | Prompts as slash commands |
 | EXT-D26 | Non-text MCP content replaced by placeholders | v1 has no image input (BRD 2.2) | Pass images to the model |
 | EXT-D27 | Protocol headers in config dropped with a warning | They belong to the SDK and the spec version | Allow overrides |
 | EXT-D28 | `antai mcp add --project` updates the trust hash only when nothing else changed since trust | The user just approved this server; any other change still re-asks | Always re-ask; always update |
-| EXT-D29 | Non-loopback `http://` server URLs refused; OAuth endpoints must be `https` and not private, loopback or link-local (deliverable 05, Q05-8, Q05-9) | Headers and bearer tokens must not cross the network in clear text; discovery must not be steered at internal hosts | Warn on plain HTTP and allow it |
-| EXT-D30 | Login refused when authorization-server metadata is missing, checked in `redirectToAuthorization` against the endpoint seen by the `fetch` wrapper (answers Q03-8 by default) | The spec says refuse; the SDK falls back to `/authorize` | Rely on the SDK |
+| EXT-D29 | Non-loopback `http://` server URLs refused (FR-MCP-01); OAuth endpoints must be `https` and not private, loopback or link-local (deliverable 05, section 5.4) | Headers and bearer tokens must not cross the network in clear text; discovery must not be steered at internal hosts | Warn on plain HTTP and allow it |
+| EXT-D30 | Login refused when authorization-server metadata is missing, checked in `redirectToAuthorization` against the endpoint seen by the `fetch` wrapper | The spec says refuse; the SDK falls back to `/authorize` | Rely on the SDK |
 | EXT-D31 | Validation never blocks start; findings per unit, one summary line, details in the views | G5 and NFR-REL-02 | Fail on the first error |
 | EXT-D32 | `PROFILE.md` `name` is strict; `SKILL.md` `name` is lenient | antai owns the profile format; skills come from other tools | One rule for both |
 
@@ -1254,26 +1259,28 @@ Next week the lead adds a second skill folder. It appears in `/skills` at the ne
 
 ## 11. Open questions
 
+No answer is expected soon. Each row's default is what this document uses; nothing here waits on an answer.
+
 | ID | Question | Options | Default assumed | Owner |
 |---|---|---|---|---|
-| Q10-1 | [USER] A skill whose frontmatter `name` is missing or differs from its folder: load under the folder name with a warning, or skip? | Lenient (agentskills client guide); skip (BRD FR-SKL-01) | Lenient (EXT-D6) | Daksh, BRD review |
+| Q10-1 | [USER] A skill whose frontmatter `name` is missing or differs from its folder: load under the folder name with a warning, or skip? | Lenient; skip (BRD FR-SKL-01) | Lenient (EXT-D6) | Daksh |
 | Q10-2 | [USER] Read the user-level `~/.agents/skills/` (and `~/.claude/skills/`) as well? | Yes; no | No in v1; documented in section 9 | Daksh |
-| Q10-3 | Is a total cap across instruction files needed, beyond 20 KB per file? | Total cap (Codex 32 KiB); warning only | Warning at deliverable 08's budget | Deliverable 08 |
-| Q10-4 | [USER] Is `"profile"` in global config a default profile below auto-match? | Default; ignored outside project config | Default (pending BRD review) | Daksh |
+| Q10-3 | Is a total cap across instruction files needed, beyond 20 KB per file? | Total cap (for example 32 KiB); warning only | Warning at deliverable 08's budget | Deliverable 08 |
+| Q10-4 | [USER] Is `"profile"` in global config a default profile below auto-match? | Default; ignored outside project config | Default (beyond the BRD) | Daksh |
 | Q10-5 | [USER] May a profile tighten tools (for example `tools.disabled`) in v1? | Yes, tighten-only; no | No; v1.1 candidate | Daksh |
 | Q10-6 | Use `toolSearch` for MCP tools in v1? | Not in v1; defer tools of large servers | Not in v1 unless the P0 budget test fails | P0 spike |
 | Q10-7 | [USER] Should the first interactive turn wait briefly for servers still connecting? | No wait; wait up to a few seconds with Esc to skip | No wait, with a notice when tools arrive | Daksh |
-| Q10-8 | How does `@ai-sdk/mcp` behave on abort (cancellation sent?) and when a server returns an input-required result or elicitation that antai did not declare? (unverified) | — | Treat as a tool error | P0 spike |
+| Q10-8 | How does `@ai-sdk/mcp` behave on abort (cancellation sent?) and when a server returns an input-required result or elicitation that antai did not declare? (to be confirmed in the P0 spike) | — | Treat as a tool error | P0 spike |
 | Q10-9 | How are arguments escaped when antai's own stdio transport runs a `.cmd` launcher through `cmd.exe /c`? | Reuse `cross-spawn`'s escaping; own code | `cross-spawn` rules, confirmed in P0 spike question 6 | P0 spike |
 | Q10-10 | [USER] Add a CLI that runs the strict validator over skills, profiles and MCP files with an exit code, for team CI? | Not in v1; `antai check` | Not in v1; DOC-04 uses `/skills` and `antai mcp list` | Daksh |
-| Q10-11 | [USER] How does a user switch off a trusted project's server for themselves without editing the shared file? | Global `mcp.disabledServers` (tighten-only); decline trust | Add `mcp.disabledServers` to global config (deliverable 11 confirms) | Daksh |
+| Q10-11 | [USER] How does a user switch off a trusted project's server for themselves without editing the shared file? | Global `mcp.disabledServers` (tighten-only); decline trust | Global `mcp.disabledServers` (section 6.3) | Daksh |
 | Q10-12 | Which JSON Schema keywords in MCP input schemas does each provider reject, and should `MA` strip or simplify them? | Pass as given; normalise per provider | Pass as given; the error names the tool | Deliverable 09, P0 spike |
 | Q10-13 | Is 2,000 characters the right cap for MCP tool descriptions under the Groq budget? | Lower; higher | 2,000 | Deliverable 08 |
-| Q10-14 | [USER] In an untrusted folder, does a project profile replace a global profile of the same name? | Keep global (EXT-D7); replace (BRD FR-PRF-01 literal) | Keep global, clash listed | Daksh, BRD review |
+| Q10-14 | [USER] In an untrusted folder, does a project profile replace a global profile of the same name? | Keep global (EXT-D7); replace (BRD FR-PRF-01 literal) | Keep global, clash listed | Daksh |
 | Q10-15 | Does `@ai-sdk/mcp` surface tool-list change notifications, and should antai refetch tools mid-session? | Ignore; refetch and re-run the drift check | Ignore in v1 | P0 spike |
-| Q10-16 | [USER] Extend `${VAR}` to `command`, `args` and `url` for `.mcp.json` compatibility with Claude Code, and keep `${VAR:-default}`? | Env and headers only (FR-MCP-03, deliverable 05); all five fields | Env and headers only, with the default form (EXT-D16) | Daksh, BRD review |
+| Q10-16 | [USER] Extend `${VAR}` to `command`, `args` and `url` for compatibility with `.mcp.json` files written for other tools, and keep `${VAR:-default}`? | Env and headers only (FR-MCP-03, deliverable 05); all five fields | Env and headers only, with the default form (EXT-D16) | Daksh |
 
-Questions answered here: Q01-9 (section 6.8, EXT-D23), Q03-8 (section 6.13, EXT-D30, default pending P0), Q03-9 (section 6.7), Q05-9 (section 6.1, EXT-D29), Q05-11 (section 6.6, assumption pending P0). Used without change: Q01-2 (custom stdio transport), Q01-16 (annotation drift), Q5 (built-in skills, Product owner).
+Other deliverables' questions settled here: Q01-9 (section 6.8, EXT-D23), Q03-8 (section 6.13, EXT-D30, confirmed in the P0 spike), Q03-9 (section 6.7), Q05-2 (section 6.6), Q05-3 (section 6.2), Q05-8 and Q05-9 (sections 6.1 and 6.13, EXT-D29), Q05-11 (section 6.6, confirmed in the P0 spike). Defaults of other deliverables used as stated: custom stdio transport (Q01-2), annotation drift (Q01-16), the built-in skill list (BRD Q5).
 
 ---
 
@@ -1313,38 +1320,12 @@ Questions answered here: Q01-9 (section 6.8, EXT-D23), Q03-8 (section 6.13, EXT-
 | D5, D12, D14 | 3.1, 4 |
 | D15, D16, D22, D29 | 2.5, 6.3, 6.12, 6.13 |
 | CR-04, CR-16 | 5.1, 5.6, 6.7 |
-| A-C10..A-C13, A-S9, A-S11 | 6.6, 6.7, 6.10, 6.12 |
+| Deliverable 01 TD5; deliverable 02, sections 8.3, 8.4 and 8.9 | 6.6, 6.7, 6.10, 6.12 |
 | DLV-SW-09, DLV-SW-10, DLV-VER-05, DLV-DOC-04 | 4.1, 5.1, 5.6, 5.7, 8.1 |
-| Q5, Q01-9, Q03-8, Q03-9 | 5.7, 6.7, 6.8, 6.13 |
+| Built-in skill list (BRD Q5), MCP version negotiation, EXT-D23, EXT-D30 | 5.7, 6.7, 6.8, 6.13 |
 
 ---
 
 ## 13. Sources
 
-Checked on 12 October 2026 through research notes B, C, E and F unless stated.
-
-**Agent Skills and instruction files**
-- Agent Skills specification: https://agentskills.io/specification
-- Client implementation guide: https://agentskills.io/client-implementation/adding-skills-support
-- Reference validator `skills-ref`: https://github.com/agentskills/agentskills/blob/main/skills-ref/src/skills_ref/validator.py
-- Claude Code skills: https://code.claude.com/docs/en/skills
-- Claude Code memory (`CLAUDE.md`, `AGENTS.md`): https://code.claude.com/docs/en/memory
-- AGENTS.md: https://agents.md/
-- Codex AGENTS.md: https://learn.chatgpt.com/docs/agent-configuration/agents-md
-- Codex skills: https://learn.chatgpt.com/docs/build-skills
-- Gemini CLI skills: https://geminicli.com/docs/cli/skills/
-- opencode skills: https://opencode.ai/docs/skills/
-
-**MCP**
-- Versioning: https://modelcontextprotocol.io/specification/versioning
-- 2026-07-28 changelog: https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/changelog.mdx
-- Streamable HTTP (2026-07-28): https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http
-- Tools and annotations: https://modelcontextprotocol.io/specification/2026-07-28/server/tools
-- Authorization (2026-07-28): https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/authorization/index.mdx
-- Claude Code MCP (`.mcp.json`, `${VAR}`): https://code.claude.com/docs/en/mcp
-
-**AI SDK**
-- MCP tools in the AI SDK: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
-- `@ai-sdk/mcp` 2.0.73 types and bundle: https://unpkg.com/@ai-sdk/mcp@2.0.73/dist/index.d.ts and https://unpkg.com/@ai-sdk/mcp@2.0.73/dist/index.js
-- Tool fingerprinting: https://app.unpkg.com/ai@7.0.40/files/src/generate-text/tool-fingerprint.ts
-- Tool search: https://ai-sdk.dev/docs/ai-sdk-core/tool-search
+External facts in this document (package versions, spec versions, API names and file formats) were checked on 12 October 2026 and are stated where they are used; the P0 spike re-checks the ones the design depends on.

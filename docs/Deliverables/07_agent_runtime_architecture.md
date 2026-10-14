@@ -8,7 +8,8 @@
 | **Version** | 0.1 |
 | **Date** | 12 October 2026 |
 | **Author** | Daksh Nagpal |
-| **Based on** | BRD_1 v0.4, ARCHITECTURE_1 v0.1, DELIVERABLES_1 v0.2, deliverables 01, 02, 03, 04, 05, 06, 09 and 10 (v0.1), research notes B, C, D, E and F |
+| **Based on** | BRD_1 v0.4, HLD.png, deliverable 00 (v0.3), deliverables 01, 02, 03, 04, 05, 06, 09 and 10 (v0.1), deliverables 08 and 11 to 13 (where named in the text) |
+| **How to use** | Reference design, not a fixed rail. Where the technology needs something different or extra, the implementation may change it; the change is then made in every deliverable it touches, so the set keeps agreeing. |
 
 ## Contents
 
@@ -54,23 +55,32 @@ It does not repeat the component catalogue (deliverable 01, section 5.9), redraw
 | Start-up budget, lazy loading, shutdown order | Bundling and chunks: deliverable 16. Benchmarks: deliverable 15 |
 | Runtime knobs, test seams | Test plan: deliverable 14 |
 
-### 1.3 Items pending BRD review used here
+### 1.3 Additions beyond BRD v0.4
+
+These go beyond BRD v0.4. The design uses them as stated; the BRD can adopt them later.
 
 | Ref | What this document assumes | Sections |
 |---|---|---|
-| A-C1, A-C2, A-C3, A-C5, A-C8 | v7 names: `toolApproval` on the agent, `isStepCount`, `await agent.stream()`, `result.stream`, nested usage fields, `tool-output-denied` | 4, 5 |
-| A-C7 | SDK `maxRetries: 0`; antai's own retry with deliverable 09's numbers. BRD FR-ERR-02 still says "retried by the SDK (default 2 retries)" | 4.1, 9.2 |
-| A-S5 | Provider keys never in `process.env` | 7.3 |
-| A-S6 | Redact first, then cap (BRD FR-SH-08 lists the other order) | 2.5, 6.1 |
-| A-S7, A-S8 | Type-ahead discard; per-process approval secret | 4.5, 11 |
+| Deliverable 06, section 5.3 | AI SDK v7 names: `toolApproval` on the agent, `isStepCount`, `await agent.stream()`, `result.stream`, nested usage fields, `tool-output-denied` | 4, 5 |
+| Deliverable 09, section 9.1 | SDK `maxRetries: 0`; antai's own retry with deliverable 09's numbers. BRD FR-ERR-02 still says "retried by the SDK (default 2 retries)" | 4.1, 9.2 |
+| Deliverable 01, rule 11 | Provider keys never in `process.env` (the outcome is now in BRD v0.4, FR-SH-06) | 7.3 |
+| Deliverable 02, section 6.3 | Redact first, then cap (BRD FR-SH-08 lists the other order) | 2.5, 6.1 |
+| Deliverable 02, section 3.10; deliverable 01, rule 7 | Type-ahead discard; per-process approval secret | 4.5, 11 |
 | CR-01 | `maxOutputTokens` always set; Groq per-minute token guard | 4.1, 9.2 |
-| Q01-3 | Captured `sudo` command spawned without `detached`, with `sudo -n` | 7.2, 7.7 |
+| Deliverable 03, SD-11 | Captured `sudo` command spawned without `detached`, with `sudo -n` | 7.2, 7.7 |
 | Deliverable 04, DS-D6 | Response messages written when each stream call ends (BRD FR-HIS-02 says "when the turn ends") | 3.3 |
-| Deliverable 04, P7 | Side-effecting calls denied while the audit log cannot be written | 9.5 |
+| Deliverable 04, section 13, P7 | Side-effecting calls denied while the audit log cannot be written | 9.5 |
 
 ### 1.4 Runtime overview
 
 RT-1a shows the session layer and the agent runtime; RT-1b shows the tool side. Names are deliverable 01 component IDs.
+
+In HLD.png terms, this document is the runtime of the Engine (Agent Brain, `agent/`) and of its links: to the Session (`session/`), to Context (instructions from `context/`), to the Model Gateway (`providers/`: `REG`, `RTY`) and to the Tool Pipeline (Safety Guard `POL`, Tool Service `TREG`, Secret Filter `RED`). Deliverable 01, section 1.3 has the full mapping. Where the diagrams differ from the drawing, the reason is given:
+
+- **The Safety Guard returns a decision; it does not call the tool.** `POL` answers the SDK's `toolApproval` hook, and the SDK then calls the tool through `TREG`. The SDK owns the tool loop, so HLD.png's "yes" arrow is the SDK running an approved call.
+- **The loop is split in two.** The model and tool loop runs in the Agent Brain (`ToolLoopAgent` inside `AG`). The outer loop across approval resumptions runs in `SC` (section 3.3), because only the session opens the "asks you Yes/No" dialogs and writes history.
+- **`REG` and `RTY` are drawn inside layer ③**, as in deliverable 01, section 5.1, because the wrapped model they return is one of each turn agent's options. Their code stays in `providers/`, HLD.png's Model Gateway.
+- **Shutdown sits with the Boot Service.** `LIFE` (`src/bootstrap/lifecycle.ts`) handles signals, shutdown and crashes (sections 7.8, 9.4 and 10.3). It lives in `bootstrap/` because it undoes, in reverse order, the wiring that start-up made.
 
 #### RT-1a Core collaboration: session and agent
 
@@ -211,13 +221,13 @@ Every background task runs through one helper, `runBackground(name, signal, fn)`
 
 | Task | Starts | Concurrency | Bound | Who waits for it | On failure |
 |---|---|---|---|---|---|
-| MCP connect, per server (SD-19a, SD-20) | After the first frame; project servers only when trusted | All servers in parallel | Server's `startupTimeoutMs`, default 30 s (deliverable 10, EXT-D21) | Nobody interactively. `run` waits until every server is connected, failed or needs login (deliverable 10, answering Q01-9) | That server is "failed" (NFR-REL-02) |
+| MCP connect, per server (SD-19a, SD-20) | After the first frame; project servers only when trusted | All servers in parallel | Server's `startupTimeoutMs`, default 30 s (deliverable 10, EXT-D21) | Nobody interactively. `run` waits until every server is connected, failed or needs login (deliverable 10) | That server is "failed" (NFR-REL-02) |
 | OAuth proactive refresh (SD-21c) | Before that server's connect | One per server, under the credentials lock | Lock 2 s; token request within the connect bound | That server's connect | Server "needs login" |
 | First `.env` known-value scan (SD-1b) | After the first frame; in `run`, before stdin is read | Async walk, at most 8 files open | None. A notice after 10 s (section 9.5) | Every tool output (the gate in `TREG`, HLD-D21). The first user message, for at most 5 s (section 5.2) | Unreadable folders skipped and logged |
 | `.env` re-check by modification time (deliverable 02, SEC-D15) | At the start of each turn and after each shell command | One | As the first scan | The next tool output | As above |
 | Instruction files and skills (SD-4) | After the first frame | Parallel reads | 5 s, then missing files listed as skipped | First submit, `/instructions`, `/skills`, the `/` menu (SD-D2) | Listed with the reason (FR-SKL-06) |
 | Retention sweep and log cleanup (SD-18c) | 2 s after the prompt is ready | Sequential deletes | None; cancelled at shutdown | Nobody | Skipped; debug log |
-| Session title (SD-5b) | After the first turn ends. Not in `run` (Q03-4) or with `--no-history` | One | One attempt, no retry wait (section 9.2) | Nobody | First prompt, trimmed |
+| Session title (SD-5b) | After the first turn ends. Not in `run` (its title is the first prompt) or with `--no-history` | One | One attempt, no retry wait (section 9.2) | Nobody | First prompt, trimmed |
 | `index.json` update (SD-18a) | Turn end | One | Lock wait 2 s | Nobody | Skipped; `/history` reconciles |
 | Preloads: agent and provider chunk, bash parser WASM, tokenizer | After the first frame, when the loop is idle | One at a time | None | First submit, first `shell` decision, first budget estimate | First use loads it again and reports any error |
 
@@ -226,7 +236,7 @@ Every background task runs through one helper, `runBackground(name, signal, fn)`
 | Hazard | Rule |
 |---|---|
 | Synchronous file I/O | Only at start-up for small files (config 1 MiB cap, `trusted.json`, `credentials.json`), and in the crash and exit handlers. Everything else uses `fs/promises` |
-| Large redaction or regular-expression work | `RED` works on chunks of at most 64 KB and yields between chunks. Project `secrets.patterns` are checked for catastrophic backtracking before use (Q01-22, deliverable 02) |
+| Large redaction or regular-expression work | `RED` works on chunks of at most 64 KB and yields between chunks. Project `secrets.patterns` are checked for catastrophic backtracking before use (deliverable 02) |
 | Bash parsing | Command text is capped at 10,000 characters before `CLS` parses it (risk TR10) |
 | Token estimation | Incremental: the last step's reported `inputTokens` plus an estimate of the new parts only. The whole history is never re-tokenised per step (SD-15a). `gpt-tokenizer` is loaded lazily |
 | `JSON.parse` of big files | Session files are read line by line with a 4 MiB line cap (deliverable 04, section 6.3) |
@@ -253,9 +263,9 @@ NFR-PERF-04 allows 300 MB RSS in the 100-turn reference session. The bounds belo
 
 | Buffer | Bound | Why it is enough |
 |---|---|---|
-| Tool output kept for the model, history and card | 30,000 characters: 15,000 head and 15,000 tail (FR-SH-08) | The middle is counted and dropped, never stored (ARCHITECTURE_1 3.6) |
-| Redaction carry-over per stream (`RedactionStream`, deliverable 06, UML-2.5b) | The longest known value, and an open PEM block up to 16 KB (deliverable 02, SEC-D14) | A private-key block is the longest format detected |
-| How the cap is applied | The head is redacted as it fills, with the carry-over as look-ahead. The middle is only counted. The tail ring is redacted once at the end, with the carry-over as look-behind | Every kept character is redacted with full context on both sides. The result is the same as redacting the whole stream first (A-S6), at a fraction of the CPU |
+| Tool output kept for the model, history and card | 30,000 characters: 6,000 head and 24,000 tail (FR-SH-08; split in deliverable 08, 8.4) | The middle is counted and dropped, never stored |
+| Redaction carry-over per stream (`RedactionStream`, deliverable 06, UML-2.5b) | The longest known value and at least 4 KB (deliverable 02, 6.3), and an open PEM block up to 16 KB (deliverable 02, SEC-D14) | A private-key block is the longest format detected |
+| How the cap is applied | The head is redacted as it fills, with the carry-over as look-ahead. The middle is only counted. The tail ring is redacted once at the end, with the carry-over as look-behind | Every kept character is redacted with full context on both sides. The result is the same as redacting the whole stream first, at a fraction of the CPU |
 | Streamed text held back for redaction | 8 KB per run without whitespace; 16 KB for an open PEM block (deliverable 02, section 6.4) | Usually one word |
 | `read_file` result | 2,000 lines or 50 KB (FR-TOOL-01) | — |
 | Piped stdin in `run` | 100 KB (FR-CLI-03) | — |
@@ -263,7 +273,7 @@ NFR-PERF-04 allows 300 MB RSS in the 100-turn reference session. The bounds belo
 | Step messages kept for an abort (`TurnState.stepMessages`, SD-D4) | One stream call's steps; cleared when written | Written before each dialog and at turn end |
 | stdio MCP stderr | 200-line ring buffer per server (deliverable 10) | Shown in `/mcp` |
 | Debug log | 10 MiB per file, one rotation (DS-D24) | — |
-| Tokenizer rank data | 2.4 MB file, loaded once and only for gpt-oss models (research F 5.3) | — |
+| Tokenizer rank data | 2.4 MB file, loaded once and only for gpt-oss models | — |
 
 ---
 
@@ -282,10 +292,10 @@ NFR-PERF-04 allows 300 MB RSS in the 100-turn reference session. The bounds belo
   - `decisions`: the policy decisions by `toolCallId`;
   - `pending`: approval requests not yet answered;
   - `stepMessages`: step messages not yet written;
-  - `deniedAction`: drives exit code 5.
+  - `deniedAction`: set when an approvable call is denied; drives exit code 5 (deliverable 11, IC-P2).
 
   `TurnState` implements `TurnHooks` (`onStepEnd`, `recordDecision`). It is discarded at turn end, so a failed turn leaves no half-updated state behind (section 9.4).
-- **Context sources are fixed per turn.** The tool set is built once per turn (UML-D19). The instruction sources (files, profile, skill lines, environment facts) are captured at turn start. `IB` rebuilds the instructions for every stream call and never stores them (INV-20). Because its inputs are fixed, the text is byte-identical within the turn. The request prefix therefore stays stable and the provider prompt cache keeps hitting across approval resumptions (research F 5.5). A changed `AGENT.md` applies from the next turn.
+- **Context sources are fixed per turn.** The tool set is built once per turn (UML-D19). The instruction sources (files, profile, skill lines, environment facts) are captured at turn start. `IB` rebuilds the instructions for every stream call and never stores them (INV-20). Because its inputs are fixed, the text is byte-identical within the turn. The request prefix therefore stays stable and the provider prompt cache keeps hitting across approval resumptions. A changed `AGENT.md` applies from the next turn.
 
 ### 3.2 Submission, slash commands and the one-turn rule
 
@@ -306,7 +316,7 @@ submit(text: string): void {
 interrupt(): void { this.turn?.abort.abort({ kind: 'user' }) ?? this.command?.abort({ kind: 'user' }); }
 ```
 
-- **One turn at a time.** Enter is refused while a turn or a waiting command runs; the renderer keeps the text. There is no queue (Q01-19).
+- **One turn at a time.** Enter is refused while a turn or a waiting command runs; the renderer keeps the text. There is no queue (HLD-D18).
 - **Waiting commands.** Most built-in commands finish at once (UML-4a, the Idle self-transition). Some wait: `/compact` makes a model call, `/mcp` login waits for the browser, `/model` may ask for a key, `/resume` opens a session. These set `commandRunning` and take a child of the session `AbortController`, so Esc cancels them. A cancelled `/compact` writes nothing (SD-15b).
 
 ### 3.3 The turn loop
@@ -318,7 +328,7 @@ Deliverable 03, SD-5a and SD-7 show the messages; deliverable 06, UML-5 the stat
 async runTurn(input: UserInput): Promise<void> {
   const turn = this.beginTurn();                          // TurnState: number, abort, stepsUsed = 0
   try {
-    await race(red.firstScan, 5_000, turn.abort.signal);  // section 5.2 (Q05-6): known values before anything is sent
+    await race(red.firstScan, 5_000, turn.abort.signal);  // section 5.2: known values before anything is sent
     await history.appendUser(red.redact(input.text));     // FR-HIS-02: on disk before any network call
     await race(context.ready, 5_000, turn.abort.signal);  // instruction files and skills (SD-D2)
     const sources = context.capture(this.state);          // fixed for the turn (section 3.1)
@@ -332,7 +342,7 @@ async runTurn(input: UserInput): Promise<void> {
       const result = await agent.stream(messages, turn.abort.signal);
       const pumped = await this.pump(result.stream, turn);           // EVM.map per part; collects open requests
       if (pumped.error) throw pumped.error;               // classified by RTY (deliverable 09, MP-7)
-      const response = await result.responseMessages;     // not awaited after an abort (Q03-2)
+      const response = await result.responseMessages;     // not awaited after an abort (section 5.4)
       await history.appendMessages(response);             // DS-D6: before any dialog
       turn.stepMessages.length = 0;
       messages = messages.concat(response);               // within a turn: the SDK's own messages (04, section 6.6)
@@ -371,7 +381,7 @@ Rules the code encodes:
 
 ### 3.4 RT-2 Approval resumptions and the step budget
 
-FR-AGT-02 counts model steps across the whole turn. `isStepCount(n)` counts steps within one `agent.stream()` call. So the agent is rebuilt for every resumption with `isStepCount(maxSteps − stepsUsed)` (SD-D5; deliverable 06, INV-19). `stepsUsed` is counted from the same `onStepEnd` callbacks the SDK uses to count steps. Both counters use the SDK's own definition of a step, so they cannot drift apart. This holds whether the SDK runs approved tools inside the first step of the continuation or before it (Q07-1).
+FR-AGT-02 counts model steps across the whole turn. `isStepCount(n)` counts steps within one `agent.stream()` call. So the agent is rebuilt for every resumption with `isStepCount(maxSteps − stepsUsed)` (SD-D5; deliverable 06, INV-19). `stepsUsed` is counted from the same `onStepEnd` callbacks the SDK uses to count steps. Both counters use the SDK's own definition of a step, so they cannot drift apart. This holds whether the SDK runs approved tools inside the first step of the continuation or before it.
 
 ```mermaid
 flowchart TB
@@ -403,7 +413,7 @@ flowchart TB
 - **A request in the last allowed step is not shown.** If step 25 raised a `tool-approval-request`, the model would need a 26th step to see the result. The runner closes the request with a synthetic result ("not run: the step limit for this turn was reached") and ends the turn with the cap message. The user never approves something that then cannot run (RT-D3).
 - **Other calls in the same step** that were Safe or approved automatically have already run when the stream ends. The open requests run in the continuation. The side-effect lock (section 6.2) keeps audit order equal to execution order.
 - **A denial costs a step too.** The continuation returns `execution-denied` to the model, which replans in a model step.
-- **The SDK may re-validate a response by calling `toolApproval` again** (Q03-3). If it does, the wrapper answers from `TurnState.decisions` (section 4.4), so the decision cannot change between the dialog and execution.
+- **The SDK may re-validate a response by calling `toolApproval` again.** If it does, the wrapper answers from `TurnState.decisions` (section 4.4), so the decision cannot change between the dialog and execution.
 
 ### 3.5 Mode, model, effort and profile changes
 
@@ -411,7 +421,7 @@ flowchart TB
 |---|---|---|---|---|---|
 | Mode | `/mode`, `--mode`, profile load | `SLASH`: `research`, `manual`, `auto` only (`SelectableMode`) | Next turn (`activeTools`, `POL`) | `skip` only by launch flag (FR-MODE-02). A mid-session profile switch never loosens (FR-PRF-03). No project file sets `auto` (FR-CFG-05) | `setting` event, audit first (SD-14b) |
 | Model | `/model`, `--model`, profile | `REG` resolves. `CAT` refuses known non-tool models. Key prompt if missing (deliverable 09, section 11.1) | Next turn; `PR` strips provider-specific parts from the copy (FR-MOD-05, MP-8) | Untrusted project `model` ignored (FR-CFG-04) | `setting` (SD-14a) |
-| Effort | `/effort`, `--effort`, profile | Five BRD levels (A-C4 not exposed); `CAT` says whether the model reasons | Next turn (`reasoning`, deliverable 09, section 6) | Notice when ignored (FR-MOD-06) | `setting` |
+| Effort | `/effort`, `--effort`, profile | Five BRD levels (the SDK's extra levels `minimal`, `xhigh` and `max` are not exposed); `CAT` says whether the model reasons | Next turn (`reasoning`, deliverable 09, section 6) | Notice when ignored (FR-MOD-06) | `setting` |
 | Profile | `/profile`, `--profile`, pin, auto-match | `PRF`: validation, trust limits | Next turn: instructions and skill subset. Defaults for model and effort. Mode only if not looser | One active profile (FR-PRF-04) | `setting` |
 | Allow-list | Dialog option on a Normal shell command | `APR` (D27) | At once, through the next snapshot | Not persisted, not restored (SD-D7) | `approval` event, `by: user` |
 | `/clear`, `/resume` | Slash commands | — | At once: the session ends and another opens (UML-4a) | Idle only | `end`, `resume` events |
@@ -422,27 +432,27 @@ flowchart TB
 
 ### 4.1 `ToolLoopAgent` options
 
-`TurnAgentFactory` (`AG`, deliverable 06, UML-2.2a) creates a new agent for every stream call: once per turn, and once per approval resumption (HLD-D2, SD-D5). Construction makes no network call. Option names are the v7 names verified in research B and F, ARCHITECTURE_1 and deliverable 06 section 5.3 (`ai@7.0.137`).
+`TurnAgentFactory` (`AG`, deliverable 06, UML-2.2a) creates a new agent for every stream call: once per turn, and once per approval resumption (HLD-D2, SD-D5). Construction makes no network call. Option names are the AI SDK v7 names of deliverable 06, section 5.3 (`ai@7.0.137`); the P0 spike re-checks them against the typings.
 
 | Option | Value | Comes from | Requirement |
 |---|---|---|---|
-| `model` | `REG.languageModel(ref)`: the provider instance's model wrapped by `RetryMiddleware` through `wrapLanguageModel`. Instances are cached per provider, base URL and key source (deliverable 09, section 2.2) | Snapshot `model`; key from `CRED` or the environment, passed as `apiKey` (A-S5) | FR-MOD-01..08, A-C7 |
-| `instructions` | `IB.build(spec, sources)`, sources fixed per turn (section 3.1) | `INS`, `PRF`, `SKR`, `ENV` | FR-AGT-03, A-C6 |
+| `model` | `REG.languageModel(ref)`: the provider instance's model wrapped by `RetryMiddleware` through `wrapLanguageModel`. Instances are cached per provider, base URL and key source (deliverable 09, section 2.2) | Snapshot `model`; key from `CRED` or the environment, passed as `apiKey`, never through `process.env` | FR-MOD-01..08; own retry (section 9.2) |
+| `instructions` | `IB.build(spec, sources)`, sources fixed per turn (section 3.1) | `INS`, `PRF`, `SKR`, `ENV` | FR-AGT-03, INV-20 |
 | `tools` | The turn's tool set: built-ins plus connected MCP tools, minus `tools.disabled`, `mcp.tools.deny`, and `shell` without bash. Every `execute` is wrapped (section 6.1). Built in a fixed order (built-ins, then MCP tools sorted by name) | Config; `MCPM` status at turn start | FR-TOOL-10, FR-MCP-05, 06 |
 | `activeTools` | Names allowed in the mode (section 4.6) | Snapshot `mode` | FR-MODE-01 |
-| `stopWhen` | `isStepCount(maxSteps − stepsUsed)` | Snapshot | FR-AGT-02, A-C2 |
+| `stopWhen` | `isStepCount(maxSteps − stepsUsed)` | Snapshot | FR-AGT-02, INV-19 |
 | `prepareStep` | `MessagePreparer.prepareStep` (section 4.3) | Snapshot, `CAT` | FR-AGT-05, FR-MOD-05 |
-| `toolApproval` | Generic async function around `POL.decide` (section 4.4) | Snapshot | FR-SH-02, A-C1 |
-| `experimental_toolApprovalSecret` | Per-process secret, set through the `SDK` shim (section 4.5) | `AG` | A-S8 |
+| `toolApproval` | Generic async function around `POL.decide` (section 4.4) | Snapshot | FR-SH-02 |
+| `experimental_toolApprovalSecret` | Per-process secret, set through the `SDK` shim (section 4.5) | `AG` | Deliverable 01, rule 7 |
 | `reasoning`, `providerOptions` | `REG.effortOptions(model, effort)`, plus Ollama `num_ctx` (deliverable 09, section 6) | Snapshot `effort`, `CAT`, config | FR-MOD-06, 07 |
-| `maxOutputTokens` | Always sent: `models.<ref>.maxOutputTokens`, else the catalogue's `defaultMaxOutputTokens`. That is 4,096 for gpt-oss on Groq, provisional (deliverable 09, section 4.2) | `CAT`, config | CR-01 |
-| `maxRetries` | `0` (through `RequestOptions`, deliverable 06, section 5.3) | Constant | A-C7 |
+| `maxOutputTokens` | Always sent: `models.<ref>.maxOutputTokens`, else the catalogue's `defaultMaxOutputTokens`. That is 4,096 for gpt-oss on Groq, provisional (deliverable 09, section 4.2). This is the upper bound: `PR` lowers it per step to min(O_max, E − I − margin) and `RTY`'s middleware applies that value to the request (deliverable 08, 9.3) | `CAT`, config | CR-01 |
+| `maxRetries` | `0` (through `RequestOptions`, deliverable 06, section 5.3) | Constant | Own retry in `RTY` (section 9.2) |
 | `onStepEnd` | `TurnHooks.onStepEnd` (section 4.7) | `TurnState` | FR-AGT-02, SD-D4 |
 | `onEnd` | Marks the stream call complete | `TurnState` | — |
 | `telemetry` | Not set per agent. Under `--debug`, `DBG` registers its private integration once with `registerTelemetry` through `SDK` (HLD-D27) | — | FR-ERR-03 |
 | `agent.stream({ messages, abortSignal })` | Conversation copy; the turn's signal (section 8.1) | Turn runner | FR-AGT-01, 04 |
 
-Not used: `toolChoice` (provider default), `prepareCall`, `toolSearch` (TD5), provider-executed tools (deliverable 01, rule 13), `allowSystemInMessages` (instructions never go into `messages`, A-C6).
+Not used: `toolChoice` (provider default), `prepareCall`, `toolSearch` (deliverable 01, TD5), provider-executed tools (deliverable 01, rule 13), `allowSystemInMessages` (instructions never go into `messages`).
 
 ### 4.2 Construction sketch
 
@@ -475,8 +485,8 @@ create(spec: TurnSpec, hooks: TurnHooks, t: { sources: ContextSources; toolSet: 
 
 1. **Strip provider-specific parts** (reasoning, signatures, provider metadata) from the copy for messages that a different provider produced (FR-MOD-05; deliverable 09, MP-8). The history file keeps them.
 2. **Estimate the request size**: the previous step's reported `inputTokens` plus an estimate of the parts added since. On the first step of a turn, estimate the whole copy (deliverable 09, section 4.6).
-3. **Prune** with `pruneMessages` when the estimate exceeds `context.pruneAt × window`, never separating a call from its result, then estimate again. If still over, throw `ContextOverflowError`, which ends the turn with the `/compact` hint (SD-D10). The turn runner handles both an `error` part and a rejected promise, so Q03-1's answer does not change the outcome. Pruning parameters belong to deliverable 08.
-4. **Emit `step-started`** with the turn-wide step number (`stepsUsed + 1`) and `maxSteps`, for the status line.
+3. **Prune** with `pruneMessages` when the estimate exceeds `context.pruneAt` × the effective window E (deliverable 08, 9.1), never separating a call from its result, then estimate again. If still over, throw `ContextOverflowError`, which ends the turn with the `/compact` hint (SD-D10). The turn runner handles both an `error` part and a rejected promise, so the outcome is the same whichever way the SDK reports the exception. Pruning parameters belong to deliverable 08.
+4. **Count the step** (`stepsUsed + 1` of `maxSteps`). No event: renderers take the budget from `turn-start.stepBudget` and get one `usage` event with `scope: 'step'` per step (deliverable 11, sections 4.1 and 4.5, EB-G9).
 5. Return `{ messages }` only when the copy changed.
 
 Not in `prepareStep`:
@@ -486,7 +496,7 @@ Not in `prepareStep`:
 - the repair of dangling calls (done on abort and resume, so the conversation already satisfies INV-12);
 - instructions (fixed per turn).
 
-Removing all tools on the last allowed step, to force a final answer, was considered and rejected (RT-D3, Q07-6).
+Removing all tools on the last allowed step, to force a final answer, was considered and rejected (RT-D3).
 
 ### 4.4 The `toolApproval` wrapper
 
@@ -495,7 +505,7 @@ Removing all tools on the last allowed step, to force a final answer, was consid
 function approvalWrapper(spec: TurnSpec, hooks: TurnHooks, policy: ApprovalPolicy) {
   return async ({ toolCall }: { toolCall: TypedToolCall }) => {
     const prior = hooks.decisionFor(toolCall.toolCallId);
-    if (prior) return toSdkStatus(prior);            // same answer if the SDK asks again (Q03-3)
+    if (prior) return toSdkStatus(prior);            // same answer if the SDK asks again
     let d: PolicyDecision;
     try {
       d = await policy.decide(toPolicyCall(toolCall), spec);   // read-only ports; awaits CLS.ready for shell
@@ -509,9 +519,9 @@ function approvalWrapper(spec: TurnSpec, hooks: TurnHooks, policy: ApprovalPolic
 }
 ```
 
-- **`POL.decide` keeps its read-only ports** (deliverable 06, UML-D11). It stays asynchronous, because `PathGuard` resolves symlinks and the classifier may still be loading its WASM grammar. This answers Q06-7. Pre-resolving those facts in `AG` would only move the same I/O. It would also make the audit-health check stale within a turn.
+- **`POL.decide` keeps its read-only ports** (deliverable 06, UML-D11). It stays asynchronous, because `PathGuard` resolves symlinks and the classifier may still be loading its WASM grammar. Pre-resolving those facts in `AG` would only move the same I/O. It would also make the audit-health check stale within a turn.
 - That the SDK accepts a promise from `toolApproval` is taken from deliverable 06's verified option list. If P0 finds otherwise, the parser preload and a synchronous `realpath` would make `decide` synchronous with the same results.
-- Automatic decisions (`approved` or `denied`) reach `SC` as `tool-approval-response` parts with `isAutomatic: true`. `SC` writes their `approval` events with the recorded tier, rule and summary (SD-D6). Automatic `tool-approval-request` parts, if the SDK emits them, are ignored (Q06-4 default).
+- Automatic decisions (`approved` or `denied`) reach `SC` as `tool-approval-response` parts with `isAutomatic: true`. `SC` writes their `approval` events with the recorded tier, rule and summary (SD-D6). Automatic `tool-approval-request` parts, if the SDK emits them, are ignored.
 
 ### 4.5 The approval secret
 
@@ -532,7 +542,7 @@ The registered set already excludes:
 - `shell` when bash is missing (FR-SH-11, AC-23);
 - MCP servers not connected at turn start. A server that connects mid-turn is offered from the next turn (SD-19a).
 
-gpt-oss on Groq makes no parallel tool calls (research C 1.2). No option is set for that, because `TREG` serialises side effects for every model (section 6.2).
+gpt-oss on Groq makes no parallel tool calls. No option is set for that, because `TREG` serialises side effects for every model (section 6.2).
 
 ### 4.7 Callbacks
 
@@ -542,7 +552,7 @@ gpt-oss on Groq makes no parallel tool calls (research C 1.2). No option is set 
 | `onEnd` | Mark the stream call complete. Nothing is written here: the turn runner writes after the pump, so an exception in a callback cannot lose records |
 | Others (`onStart`, `onStepStart`, `onToolExecutionStart`/`End`, `onLanguageModelCallStart`/`End`) | Not used. `prepareStep` emits step starts and `TREG` measures tools; the `--debug` integration sees the rest |
 
-`ToolLoopAgent` has no `onError` or `onAbort` (research F, verdict 14). Errors and aborts are read from the `error` and `abort` parts, and `agent.stream()` is wrapped in `try`.
+`ToolLoopAgent` has no `onError` or `onAbort`. Errors and aborts are read from the `error` and `abort` parts, and `agent.stream()` is wrapped in `try`.
 
 ---
 
@@ -563,19 +573,19 @@ gpt-oss on Groq makes no parallel tool calls (research C 1.2). No option is set 
 | `error`, `abort` | Returned to the turn runner (section 3.3); any held text is flushed first |
 | A part outside the typings at run time | No event; counted in the debug log. The exhaustive switch catches additions at compile time, and this branch covers a mismatch between typings and the bundle |
 
-Every event carries the turn number and a per-turn `seq`. `BUS` delivers events synchronously in emission order.
+Every event carries a per-process `seq` that `BUS` assigns, and turn events carry the `turnId` (deliverable 11, section 4.1). `BUS` delivers events synchronously in emission order.
 
 ### 5.2 Streamed-text redaction and the first message
 
-- **Hold-back.** `EVM` applies deliverable 02, section 6.4 (SEC-D14), which answers Q01-8. It holds back the trailing run of non-whitespace characters, or an open PEM block up to 16 KB. It releases a run longer than 8 KB except its last L − 1 characters, where L is the length of the longest known value. It flushes at the end of each step, before a tool card, and on abort. Ordinary prose waits at most one word, so `EVM`'s share of NFR-PERF-02's 50 ms stays small. DLV-VER-08 measures it.
+- **Hold-back.** `EVM` applies deliverable 02, section 6.4 (SEC-D14). It holds back the trailing run of non-whitespace characters, or an open PEM block up to 16 KB. It releases a run longer than 8 KB except its last L − 1 characters, where L is the length of the longest known value. It flushes at the end of each step, before a tool card, and on abort. Ordinary prose waits at most one word, so `EVM`'s share of NFR-PERF-02's 50 ms stays small. DLV-VER-08 measures it.
 - **One matcher per call.** `RED.register` swaps in a new matcher and never changes one in use (deliverable 06, UML-2.5b). A value found by a mid-turn re-check therefore applies from the next push.
-- **The first user message waits for the scan** (answers Q05-6). The first turn of a process waits for the initial `.env` scan for at most 5 s. Only then does it redact and store the user message (section 3.3). The prompt stays usable during the wait; only the request waits. If the scan is still running after 5 s, the message is redacted with the values known so far and sent, with a notice that the scan has not finished. The scan normally takes well under a second, and this message is the user's own text. A bound keeps a huge repository from blocking the first answer. Tool output, which can carry file contents, keeps waiting without a bound (RT-D12).
+- **The first user message waits for the scan** (RT-D4). The first turn of a process waits for the initial `.env` scan for at most 5 s. Only then does it redact and store the user message (section 3.3). The prompt stays usable during the wait; only the request waits. If the scan is still running after 5 s, the message is redacted with the values known so far and sent, with a notice that the scan has not finished. The scan normally takes well under a second, and this message is the user's own text. A bound keeps a huge repository from blocking the first answer. Tool output, which can carry file contents, keeps waiting without a bound (RT-D12).
 - **Property test.** For random splits of the same text, the concatenated output must equal `RED` applied to the whole text (section 12).
 
 ### 5.3 Reasoning
 
 - Reasoning deltas are redacted like text, because a model can echo what it read.
-- `INK` shows reasoning dimmed and collapsible. `LINE` prints a one-line "thinking…" marker. `PLAIN` emits no reasoning in v1: FR-UI-06's seven NDJSON types have no slot for it, and deliverable 11 may add one.
+- `INK` shows reasoning dimmed and collapsible. `LINE` prints a one-line "thinking…" marker. `PLAIN` emits no reasoning in v1: NDJSON 1.0 (the seven FR-UI-06 types plus `notice`, deliverable 11, section 5.3) has no slot for it.
 - Reasoning parts stay in the stored response messages (FR-MOD-05). `PR` strips them from the copy after a provider switch.
 - For gpt-oss, reasoning tokens count inside `maxOutputTokens`. A high effort can therefore end a step at `length` (deliverable 09, section 6.4).
 
@@ -583,9 +593,9 @@ Every event carries the turn number and a per-turn `seq`. `BUS` delivers events 
 
 | What | Source | Used for |
 |---|---|---|
-| Per step: input, output, reasoning, cache read, cache write | The `finish-step` part's usage: `inputTokens`, `outputTokens`, `outputTokenDetails.reasoningTokens`, `inputTokenDetails.cacheReadTokens`, `inputTokenDetails.cacheWriteTokens` (A-C5). `UsageMeter.toUsage` maps them | Status bar after each step |
-| Context share | The last step's `inputTokens` ÷ the window from `CAT` | Status bar (FR-UI-02) |
-| Per turn | `UsageMeter` sums the steps of every stream call in the turn. `result.usage` covers one stream call only and is not relied on after an abort (Q03-2). When present, it is compared with the sum, and a mismatch is logged | `usage` record at turn end (deliverable 04, section 5.10) |
+| Per step: input, output, reasoning, cache read, cache write | The `finish-step` part's usage: `inputTokens`, `outputTokens`, `outputTokenDetails.reasoningTokens`, `inputTokenDetails.cacheReadTokens`, `inputTokenDetails.cacheWriteTokens`. `UsageMeter.toUsage` maps them | Status bar after each step |
+| Context share | The last step's `inputTokens` ÷ the effective window E: the window from `CAT`, or the plan's per-minute token limit when smaller (deliverable 08, 9.1) | Status bar (FR-UI-02) |
+| Per turn | `UsageMeter` sums the steps of every stream call in the turn. `result.usage` covers one stream call only and is not relied on after an abort. When present, it is compared with the sum, and a mismatch is logged | `usage` record at turn end (deliverable 04, section 5.10) |
 | Rate-limit snapshot | `RTY`'s state for the model (deliverable 09, section 8.3) | `/usage`, `usage.rateLimit` |
 | Title and `/compact` calls | Their own usage, added to the session total | `/usage` |
 
@@ -659,7 +669,7 @@ The terminal-lease port (`TerminalLease.withTerminal`, UML-2.6a) reaches `SR` th
 
 ### 6.2 Serialisation and parallelism
 
-The SDK may start several `execute` calls of one step at the same time. gpt-oss on Groq never returns more than one call per step (research C 1.2), but OpenAI, Anthropic, Gemini and `qwen/qwen3.8-27b` can.
+The SDK may start several `execute` calls of one step at the same time. gpt-oss on Groq never returns more than one call per step, but OpenAI, Anthropic, Gemini and `qwen/qwen3.8-27b` can.
 
 | Tool | Class | Rule |
 |---|---|---|
@@ -741,33 +751,33 @@ interface SpawnSpec {
 | Kind | Program | `detached` | `stdio` | Notes |
 |---|---|---|---|---|
 | `command` | Absolute bash path. macOS and Linux: `/bin/bash`, else `bash` resolved on `PATH`. Windows: Git Bash `bash.exe` from `GBL`. Args `['-c', command]` | POSIX `true` (own process group and session); Windows `false` | `['ignore', 'pipe', 'pipe']` | `cwd` workspace; environment per section 7.3; `shell: false`; Windows `windowsHide: true` |
-| `command` with a `sudo` segment | As above, with `sudo -n` in the segment (Q01-3) | `false` (Q01-3) | As above | Killed through `sudo`'s signal relay; P0 confirms |
+| `command` with a `sudo` segment | As above, with `sudo -n` in the segment (deliverable 03, SD-11) | `false`, so the command can use the credential that `sudo -v` cached | As above | Killed through `sudo`'s signal relay; P0 confirms. When it ends, on every path, `SR` runs `sudo -k` the same way (not detached), so no later command reuses the credential (FR-SH-09; deliverable 02, SEC-D28) |
 | `sudo-v` | Absolute `sudo`, args `['-v']` | `false`: it needs the controlling terminal | `'inherit'` | Only inside a terminal lease (section 7.7); macOS and Linux only |
-| `mcp-stdio` | The entry's `command` and `args`. Windows `.cmd` and `.bat` run as `%ComSpec% /c …` (A-C12) | POSIX `true`; Windows `false` | `['pipe', 'pipe', 'pipe']` | Environment per section 7.3 |
+| `mcp-stdio` | The entry's `command` and `args`. Windows `.cmd` and `.bat` run as `%ComSpec% /c …` | POSIX `true`; Windows `false` | `['pipe', 'pipe', 'pipe']` | Environment per section 7.3 |
 | `rg` | Absolute path found on `PATH`, skipping the workspace and relative entries (HLD-D15) | `false` | `['ignore', 'pipe', 'pipe']` | One call each |
-| `taskkill` | `%SystemRoot%\System32\taskkill.exe`, args `['/pid', pid, '/T', '/F']` | `false` | `'ignore'` | Spawned directly, never through Git Bash, so MSYS argument conversion cannot mangle `/T` and `/F` (research D 7) |
+| `taskkill` | `%SystemRoot%\System32\taskkill.exe`, args `['/pid', pid, '/T', '/F']` | `false` | `'ignore'` | Spawned directly, never through Git Bash, so MSYS argument conversion cannot mangle `/T` and `/F` |
 | `icacls` | `%SystemRoot%\System32\icacls.exe` (deliverable 02, section 6.7) | `false` | `'ignore'` | Once, when `~/.antai` is created |
-| `opener` | `open` (macOS) or `xdg-open` (Linux), absolute; Windows per Q01-7 | `true`, then `unref()` | `'ignore'` | Not killed at shutdown: it starts the user's browser |
+| `opener` | `open` (macOS) or `xdg-open` (Linux), absolute; Windows `explorer.exe <url>` or `rundll32 url.dll,FileProtocolHandler <url>`, without a shell, picked in the P0 spike | `true`, then `unref()` | `'ignore'` | Not killed at shutdown: it starts the user's browser |
 
-**Programs are always spawned by absolute path** (RT-D7). On Windows, libuv searches the child's working directory for a bare program name before `PATH` (libuv `src/win/process.c`; P0 confirms, Q07-8). The working directory is the workspace, so a planted `taskkill.exe`, `rg.exe` or `bash.exe` would run. On POSIX, a `PATH` with an empty or `.` entry has the same effect. `PSV` therefore refuses a `SpawnSpec` whose `file` is not absolute. MCP `command` values are resolved the same way, skipping the workspace unless the entry is itself a path inside it.
+**Programs are always spawned by absolute path** (RT-D7). On Windows, libuv searches the child's working directory for a bare program name before `PATH` (libuv behaviour, to be confirmed in the P0 spike). The working directory is the workspace, so a planted `taskkill.exe`, `rg.exe` or `bash.exe` would run. On POSIX, a `PATH` with an empty or `.` entry has the same effect. `PSV` therefore refuses a `SpawnSpec` whose `file` is not absolute. MCP `command` values are resolved the same way, skipping the workspace unless the entry is itself a path inside it.
 
 ### 7.3 Child environments
 
-This follows deliverable 02, section 6.6, and deliverable 05, Q05-2. Both children are built from one snapshot of `process.env`:
+This follows deliverable 02, section 6.6. A stdio MCP server gets the same base as a command. Both children are built from one snapshot of `process.env`:
 
 | Item | `bash -c` command | stdio MCP server |
 |---|---|---|
 | The user's environment | Copied. On Windows, names compare case-insensitively, and duplicates such as `Path` and `PATH` collapse to one entry with the original spelling | Same |
-| Stored provider keys, OAuth tokens, the approval secret | Never present: they are never in `process.env` (A-S5, INV-17) | Same |
-| Provider-key variables the user exported (`GROQ_API_KEY`) | Kept (Q01-5 default); a printed value is masked by the name rule | Kept. A project MCP file that references one through `${VAR}` is skipped (deliverable 10) |
+| Stored provider keys, OAuth tokens, the approval secret | Never present: they are never in `process.env` (FR-SH-06; INV-17; deliverable 01, rule 11) | Same |
+| Provider-key variables the user exported (`GROQ_API_KEY`) | Kept, because they are the user's own environment; a printed value is masked by the name rule | Kept. A project MCP file that references one through `${VAR}` is skipped (FR-MCP-03; deliverable 10) |
 | `ANTAI_*` variables | Removed | Removed |
 | `PAGER=cat`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0` | Set (FR-SH-06) | Not set |
 | Entry `env` with `${VAR}` substitution | — | Laid over the scrubbed base; every value registered with `RED` before the spawn (FR-MCP-03; deliverable 10) |
 | stdin | Closed | JSON-RPC pipe |
 
-With antai's own stdio transport (HLD-D8), antai passes this environment explicitly. In the fallback (`Experimental_StdioMCPTransport` through `SDK`, Q01-2), what `@ai-sdk/mcp` passes by default is unverified (Q05-2, P0). antai then supplies the full environment itself through the transport's `env` option, so an SDK default subset never applies.
+With antai's own stdio transport (HLD-D8), antai passes this environment explicitly. In the fallback (`Experimental_StdioMCPTransport` through `SDK`), what `@ai-sdk/mcp` passes by default is to be confirmed in the P0 spike. antai then supplies the full environment itself through the transport's `env` option, so an SDK default subset never applies.
 
-ANSI escape sequences in command output pass through unchanged in v1. Stripping them would save tokens on the Groq free plan (Q07-4).
+ANSI escape sequences in command output pass through unchanged in v1. Stripping them would save tokens on the Groq free plan, so they are stripped only if P0 token measurements show a real cost.
 
 ### 7.4 RT-4 Child lifecycle and tree kill
 
@@ -799,18 +809,18 @@ stateDiagram-v2
 | Step | macOS and Linux | Windows |
 |---|---|---|
 | Terminate | `process.kill(-pgid, 'SIGTERM')` | `taskkill /pid <pid> /T /F` (section 7.2), 5 s timeout. No grace period: Windows has no polite tree signal |
-| Probe | `process.kill(-pgid, 0)`: `ESRCH` means the group is gone; `EPERM` means a member is alive under another user | `process.kill(pid, 0)` on the root (reliability: Q04-7) |
+| Probe | `process.kill(-pgid, 0)`: `ESRCH` means the group is gone; `EPERM` means a member is alive under another user | `process.kill(pid, 0)` on the root (reliability to be confirmed in the P0 spike) |
 | Escalate | After 2 s, `process.kill(-pgid, 'SIGKILL')`, then probe every 50 ms for 1 s | Root still alive: `subprocess.kill()`, then `Lost` |
-| `Lost` | Notice "a process could not be stopped (pid N)"; debug log; the card says so | Same. MSYS grandchildren that `/T` misses are Q01-20 |
+| `Lost` | Notice "a process could not be stopped (pid N)"; debug log; the card says so | Same. MSYS grandchildren that `/T` misses are the Windows gap below |
 
-Options for the Windows gap (Q01-20, research D 7):
+Options for the Windows gap. v1 uses `taskkill`, plus a sweep for known MSYS children if P0 shows survivors:
 
 | Option | Catches orphaned descendants | Native code | Status |
 |---|---|---|---|
 | `taskkill /T /F` | No: it follows parent links, which break when an intermediate process exits | No | Default |
 | Job Object with kill-on-close | Yes | Needs a native addon or a helper executable (conflicts with NFR-COMP-04) | Not in v1 unless P0 finds a way without native code |
-| Sweep of descendants recorded while the command runs (CIM query through `powershell.exe`) | Partly | No; costs a PowerShell start per sweep | Candidate for Q01-20's sweep |
-| Git Bash's own `kill` on the MSYS process group | MSYS children (unverified) | No | Candidate for the P0 spike |
+| Sweep of descendants recorded while the command runs (CIM query through `powershell.exe`) | Partly | No; costs a PowerShell start per sweep | Candidate for that sweep |
+| Git Bash's own `kill` on the MSYS process group | MSYS children (to be confirmed in the P0 spike) | No | Candidate for the P0 spike |
 
 ### 7.5 Timeouts and completion
 
@@ -836,12 +846,13 @@ Flow: deliverable 03, SD-11. Runtime rules:
 3. The lease ends in a `finally` block on every path, and the renderer repaints.
 4. antai adds no time limit; `sudo` has its own password timeout. SIGTERM or SIGHUP during a lease still shuts antai down, and `PSV` kills `sudo`.
 5. If `sudo -v` fails or the lease is refused, the command is not run. The tool error tells the user to run it themselves (FR-SH-09).
+6. Once `sudo -v` has succeeded, `SR` runs `sudo -k` after the captured command ends, whatever the outcome (exit, error, timeout, Esc or a failed spawn). It is spawned as a `command` child without `detached`, like the captured run, so no later command can reuse the cached credential without a new approval (FR-SH-09; deliverable 02, SEC-D28; the effect is confirmed in the P0 spike).
 
 ### 7.8 Orphan prevention
 
 | Exit path | What stops the children |
 |---|---|
-| `/exit`, Ctrl+C twice, end of `run` | `LIFE` shutdown: `PSV.killAll()`, graceful (section 10.3) |
+| `/exit`, Ctrl+C twice, Ctrl+D twice on an empty input, end of `run` | `LIFE` shutdown: `PSV.killAll()`, graceful (section 10.3) |
 | SIGTERM, SIGHUP, Windows console close, SIGBREAK | Same |
 | Uncaught exception or unhandled rejection | Crash path: `PSV.killAllSync()` (section 9.4) |
 | Any `process.exit()` | A `process.on('exit')` hook runs `killAllSync()` as the last line. On POSIX it sends SIGKILL to each registered group, synchronously. On Windows it runs `spawnSync` of `taskkill` per root, with a 2 s timeout each |
@@ -849,7 +860,7 @@ Flow: deliverable 03, SD-11. Runtime rules:
 
 ### 7.9 stdio MCP servers under `PSV`
 
-- **Transport.** antai's own stdio transport (HLD-D8, Q01-2) writes JSON-RPC to the child's stdin and reads newline-delimited messages from stdout. stderr goes to the 200-line ring buffer and the debug log (deliverable 10).
+- **Transport.** antai's own stdio transport (HLD-D8) writes JSON-RPC to the child's stdin and reads newline-delimited messages from stdout. stderr goes to the 200-line ring buffer and the debug log (deliverable 10).
 - **Start.** The connect, including tool listing, must finish within the server's `startupTimeoutMs`. Otherwise the server is "failed" and `PSV` kills its tree.
 - **Close.** `client.close()`, end stdin, wait up to 1 s for exit, then `killTree` (SD-23a).
 - **Crash.** `PSV` reports the exit and the transport closes. `MCPM` marks the server failed. Calls in flight become tool errors, and the server's tools leave the next turn's tool set (NFR-REL-02). There is no automatic restart; Reconnect in `/mcp` starts it again (deliverable 10, EXT-D22).
@@ -910,13 +921,13 @@ Every abort carries a typed reason. A handler can then tell "interrupted by the 
 
 ### 8.2 Keys and signals
 
-This answers Q01-4 as far as documentation allows. Node documents three relevant behaviours (Node `process` signal events):
+Node documents three relevant behaviours of its `process` signal events:
 
 - `'SIGHUP'` is generated on Windows when the console window is closed, and Windows terminates Node about 10 seconds later;
 - SIGTERM can be listened for on Windows but is not sent by the system;
 - `'SIGBREAK'` is Ctrl+Break.
 
-Whether closing a Windows Terminal tab or a VS Code terminal raises the same event stays with P0 (Q01-4). Ink runs with `exitOnCtrlC: false` (research F 3.3).
+antai handles a Windows console close like SIGHUP. Whether closing a Windows Terminal tab or a VS Code terminal raises the same event is to be confirmed in the P0 spike. Ink runs with `exitOnCtrlC: false`, so only `LIFE` decides what Ctrl+C does.
 
 | Input | Idle | Turn running (stream or tool) | Dialog open | Lease active | Shutting down |
 |---|---|---|---|---|---|
@@ -927,7 +938,7 @@ Whether closing a Windows Terminal tab or a VS Code terminal raises the same eve
 | SIGTERM, SIGHUP, SIGBREAK, Windows console close | Shutdown | Interrupt, then shutdown | Interrupt, then shutdown | Shutdown (`sudo` killed) | Force exit |
 | `EPIPE` on stdout (`run \| head`) | Shutdown | Interrupt, then shutdown | — | — | — |
 
-After SIGHUP the terminal is gone. Renderers swallow write errors (`EIO`, `EPIPE`) during shutdown, and nothing waits for the screen. Exit codes for signal-triggered exits are Q07-5.
+After SIGHUP the terminal is gone. Renderers swallow write errors (`EIO`, `EPIPE`) during shutdown, and nothing waits for the screen. Signal-triggered exits use 130 for SIGINT in `run`, 143 for SIGTERM and 129 for SIGHUP; `/exit`, Ctrl+C twice and Ctrl+D twice exit 0 (deliverable 11, IC-P1; deliverable 13, UI-D13).
 
 ### 8.3 What is cancelled and what is saved
 
@@ -950,7 +961,7 @@ After SIGHUP the terminal is gone. Renderers swallow write errors (`EIO`, `EPIPE
 |---|---|
 | Provider HTTP request | `fetch` honours the signal |
 | `RTY` back-off and budget waits | Timer cleared; the call rejects with the abort reason and no error line (deliverable 09, MP-6) |
-| MCP HTTP call | Request aborted. Whether `@ai-sdk/mcp` forwards the signal for tool calls is unverified, so `MA` also races the call against the signal |
+| MCP HTTP call | Request aborted. Whether `@ai-sdk/mcp` forwards the signal for tool calls is to be confirmed in the P0 spike, so `MA` also races the call against the signal |
 | MCP stdio call | `MA` abandons the call. Whether a cancellation notification is sent is deliverable 10's |
 | `FSX` write or rename | Runs to completion; the synthetic result says whether it completed (SD-12b) |
 | Bash parsing, redaction | Synchronous and bounded; they finish |
@@ -969,16 +980,16 @@ After SIGHUP the terminal is gone. Renderers swallow write errors (`EIO`, `EPIPE
 | Model reference | Codes `model.*` (deliverable 09) | `REG` before any call | File or command, cause, fix | — | Unchanged model, or start-up fallback | 2 | — |
 | Context limit (antai) | Still over the window after pruning | `PR` (`ContextOverflowError`) | "Context window full · /compact" | — | Continues | 3 | `context` (`stopped`) |
 | Tool | Section 6.4 rows | Tool, `TREG` | Card status | Tool error | Continues | — | `command`, `mcp-call` |
-| Safety denial | Policy, user, no human, audit unavailable | `POL`, `APR` | Red card | `execution-denied` | Continues | 5 when a call was denied for lack of a human; precedence in deliverable 11 | `approval` |
+| Safety denial | Policy, user, no human, audit unavailable | `POL`, `APR` | Red card | `execution-denied` | Continues | 5 when an approvable call was denied (by `research` mode or for lack of a human, IC-P2); precedence in deliverable 11 | `approval` |
 | Config | Invalid value, unknown flag, missing key in `run` | `CFG`, `CLI` | File, key and expected value (FR-CFG-02) | — | Starts with defaults, or exits | 2 | — |
 | Storage | `ENOSPC`, `EACCES` on history, audit or index | `HS`, `AUD`, `FSX` | One notice (deliverable 04, section 6.10) | — | Continues, degraded | — | — |
 | Internal, contained | Bug inside a turn; `InvalidToolApprovalSignatureError` | Turn runner `catch` | "Internal error; report saved to `<path>`" | — | Turn ends; session continues | 1 | `error` (`internal`), crash report |
 | Internal, uncaught | Exception outside a turn, renderer crash, unhandled rejection | Process handlers, `LIFE` | Short message with the report path, no stack trace (FR-ERR-04) | — | Process exits | 1 | Crash report |
-| Cancellation | Esc, signals | `SC`, `LIFE` | Interrupted marker | Synthetic result | Turn ends | Q07-5 | `interrupted` |
+| Cancellation | Esc, signals | `SC`, `LIFE` | Interrupted marker | Synthetic result | Turn ends | 130, 143 or 129 (section 8.2) | `interrupted` |
 
 ### 9.2 Where `RTY` sits, and the stall watchdog
 
-`RetryMiddleware` (`RTY`) wraps the model inside the agent, through `wrapLanguageModel` (HLD-D7). So it retries only the model call within one step. A tool that ran in an earlier step is never re-run (FR-ERR-02, INV-18). Deliverable 09 owns the policy: MP-5 the budget guard, MP-6 the call loop, MP-7 the classification, section 9.1 the numbers. They replace FR-ERR-02's "SDK, default 2 retries" (pending BRD review, A-C7). In summary:
+`RetryMiddleware` (`RTY`) wraps the model inside the agent, through `wrapLanguageModel` (HLD-D7). So it retries only the model call within one step. A tool that ran in an earlier step is never re-run (FR-ERR-02, INV-18). Deliverable 09 owns the policy: MP-5 the budget guard, MP-6 the call loop, MP-7 the classification, section 9.1 the numbers. They replace FR-ERR-02's "SDK, default 2 retries" (beyond the BRD, section 1.3). In summary:
 
 | Setting (deliverable 09) | Value |
 |---|---|
@@ -996,10 +1007,10 @@ What this document adds is the **stall watchdog**, which produces the "timeout" 
 | Watchdog | Value | Effect |
 |---|---|---|
 | Time to first part | 60 s for hosted providers; 300 s for `ollama` and `lmstudio`, where a local model may load first | Abort the attempt; class "timeout" (retryable, within the 3 timeout attempts) |
-| Stall notice | 20 s without a part | Notice "waiting for groq · check your network" (research E 6.2, Claude Code precedent). Answers SD-16c's open note |
+| Stall notice | 20 s without a part | Notice "waiting for groq · check your network", so the user can tell a slow network from a hung turn. Used by deliverable 03, SD-16c |
 | Stall abort | 90 s without a part | Abort the attempt: class "timeout" before the commit point, `provider.stream_interrupted` after it |
 
-`RTY` reports each scheduled retry through `onRetry` (deliverable 09, section 9.4). `AG` forwards it to `BUS` as `retry scheduled { attempt, maxAttempts, at, reason }`, and `SC` stores a `retry` event. Esc during a wait cancels it at once (section 8.4).
+`RTY` reports each scheduled retry through `onRetry` (deliverable 09, section 9.4). `AG` forwards each call to `BUS` as the `retry-scheduled` event (`attempt`, `maxAttempts`, `at`, `reason`; deliverable 11, section 4.1), and `SC` stores a `retry` record (deliverable 04, section 5.9). Esc during a wait cancels it at once (section 8.4).
 
 ### 9.3 RT-6 `RTY` state per model call
 
@@ -1052,7 +1063,7 @@ function crash(err: Error, origin: string): never {
 ```
 
 - **No records on the crash path.** It writes no session or audit records, because state may be inconsistent and appended records are already valid. The session ends "Crashed" (deliverable 06, UML-4a), and its file is "Interrupted" (deliverable 04, DS-4). Resume repairs it (SD-17b).
-- **Contained internal errors.** An exception that reaches the turn runner's `catch` and matches no known class ends that turn only. `SC` writes a crash report without exiting, shows an internal-error line with the report path, writes the `error` event and returns to Idle. `TurnState` is discarded and `SessionState` changes only through idle setters (INV-2), so nothing half-updated survives. `run` exits 1. This reads FR-ERR-04 as applying to errors that stop antai (Q07-7).
+- **Contained internal errors.** An exception that reaches the turn runner's `catch` and matches no known class ends that turn only. `SC` writes a crash report without exiting, shows an internal-error line with the report path, writes the `error` event and returns to Idle. `TurnState` is discarded and `SessionState` changes only through idle setters (INV-2), so nothing half-updated survives. `run` exits 1. This reads FR-ERR-04 as applying to errors that stop antai (RT-D13).
 - **Renderer exceptions** are uncaught from the core's point of view, so they take the crash path. A broken screen cannot be trusted to show approval dialogs.
 
 ### 9.5 Recovery rules
@@ -1064,7 +1075,7 @@ function crash(err: Error, origin: string): never {
 | MCP server crash or disconnect | Server "failed"; its calls return tool errors; its tools leave the next turn | Reconnect in `/mcp` (deliverable 10) |
 | `.env` scan slow | Tool outputs keep waiting; the gate never opens on a timer. After 10 s, a notice "waiting for the .env scan (N files checked)"; Esc interrupts | The scan finishes; unreadable folders are skipped and logged (RT-D12) |
 | History write failure | History off for this session, with one notice (deliverable 04, section 6.10) | Continue |
-| Audit write failure | `POL` denies calls that need an audit record; each later call retries the audit write first (pending BRD review, deliverable 04 P7) | The block lifts when a write succeeds |
+| Audit write failure | `POL` denies calls that need an audit record; each later call retries the audit write first (beyond the BRD, deliverable 04, P7) | The block lifts when a write succeeds |
 | Index lock timeout | Index update skipped | `/history` reconciliation (SD-D19) |
 | Title call failure | First prompt used | Silent except for the debug log |
 | Terminal lease refused, or `sudo -v` failed | Tool error | The user runs the command |
@@ -1128,7 +1139,7 @@ Fast paths:
 | `ai`, `src/agent/`, `RTY`, the selected provider package | Preloaded after the first frame when idle; other providers on `/model` | First submit (`REG.ensureLoaded`), if the preload has not finished |
 | `@ai-sdk/mcp` and the MCP transport | When the first MCP connect starts | MCP connects only |
 | `web-tree-sitter` and the bash WASM grammar | Preloaded after the first frame when `shell` is registered | The first `shell` decision in `POL.decide` |
-| `gpt-tokenizer` (`o200k_harmony`) | Preloaded after the first frame for gpt-oss models; otherwise never | First guard or prune estimate; characters ÷ 4 until then (deliverable 09, section 4.6) |
+| `gpt-tokenizer` (`o200k_harmony`) | Preloaded after the first frame for gpt-oss models; otherwise never | First guard or prune estimate; until then characters ÷ 4, or ÷ 3 for tool output and JSON (deliverable 08, section 9.6) |
 | Instruction files, skills | Background (SD-D2) | First submit |
 | Provider network | Never before the first submit (deliverable 01, section 6.4) | — |
 
@@ -1136,7 +1147,7 @@ Preloading the agent chunk in idle time moves its cost off the first answer with
 
 ### 10.3 RT-8 Shutdown order and time bounds
 
-This answers Q03-7. The order is deliverable 03, SD-23a; the bounds and the force-exit rules are here.
+The order is deliverable 03, SD-23a; the bounds and the force-exit rules are here.
 
 | # | Step | Bound | If the bound is reached |
 |---|---|---|---|
@@ -1187,37 +1198,37 @@ stateDiagram-v2
 | Knob | Default | Range or note | Set by | Source |
 |---|---|---|---|---|
 | Step cap | 25 | 1 to 100 (hard ceiling) | Config `maxSteps` | FR-AGT-02, D18 |
-| Prune threshold | 0.75 of the window | — | Config `context.pruneAt` | FR-AGT-05 |
+| Prune threshold | 0.75 of the effective window E | — | Config `context.pruneAt` | FR-AGT-05 |
 | Context window when unknown | 32,000 tokens | `models.<ref>.contextWindow` | `CAT`, config | FR-AGT-05; deliverable 09, section 4.5 |
-| `maxOutputTokens` | Catalogue `defaultMaxOutputTokens`: 4,096 for gpt-oss on Groq (provisional, Q07-3); 4,096 for unknown models | `models.<ref>.maxOutputTokens` | `CAT`, config | CR-01; deliverable 09, section 4.2 |
+| `maxOutputTokens` | Catalogue `defaultMaxOutputTokens`: 4,096 for gpt-oss on Groq (provisional; the P0 spike tunes it); 4,096 for unknown models | `models.<ref>.maxOutputTokens`; lowered per step by `PR` (deliverable 08, 9.3) | `CAT`, config | CR-01; deliverable 09, section 4.2 |
 | Shell timeout | 120,000 ms | Per-pattern `shell.timeouts` | Config `shell.timeoutMs` | FR-SH-07, D18 |
 | Dev-server timeout | 30,000 ms | Rule data | `RULES` | FR-SH-07 |
 | Kill grace (POSIX); SIGKILL confirm | 2 s; 1 s | — | Constants | Deliverable 01, section 6.5; this document |
 | `taskkill` timeout | 5 s | — | Constant, proposed | Section 7.4 |
 | Pipe drain after exit | 500 ms | — | Constant, proposed | Section 7.5 |
-| Tool output cap | 30,000 characters, half head and half tail | The BRD gives a default but no key | Constant | FR-SH-08, D18 |
+| Tool output cap | 30,000 characters, 20 % head and 80 % tail (deliverable 08, 8.4) | The BRD gives a default but no key | Constant | FR-SH-08, D18 |
 | Streamed-text hold-back | 8 KB per run; 16 KB for a PEM block | — | Constant | Deliverable 02, SEC-D14 |
-| First-message scan wait | 5 s, then sent with the values known so far | Tool output has no such bound | Constant, proposed | Q05-6, section 5.2 |
+| First-message scan wait | 5 s, then sent with the values known so far | Tool output has no such bound | Constant, proposed | Section 5.2, RT-D4 |
 | `.env` scan notice | 10 s | The tool-output gate never opens on a timer | Constant, proposed | Section 9.5 |
 | Instruction and skill load wait | 5 s, then listed as skipped | — | Constant, proposed | Section 2.2 |
 | `read_file`, `list_directory`, `search_files` caps | 2,000 lines or 50 KB; 500 entries; 200 matches | `find_files` cap in deliverable 12 | Constants | FR-TOOL-01, 04, 06 |
 | Piped stdin cap | 100 KB | — | Constant | FR-CLI-03 |
-| Instruction file cap | 20 KB | — | Constant | FR-AGT-03 |
+| Instruction file cap | 20 KB | 1 KB to 100 KB | Config `context.maxInstructionBytes` | FR-AGT-03; deliverable 10, section 3.3 |
 | Read-only tool concurrency | 4 | — | Constant, proposed | Section 6.2 |
 | Non-shell tool timeouts | Read 15 s; list, find and search 30 s; write and edit 15 s; `load_skill` 5 s | — | Constants, proposed | Section 6.3 |
 | MCP start-up and tool timeouts | 30 s; 120 s | Per server | Config `startupTimeoutMs`, `toolTimeoutMs` | Deliverable 10, EXT-D21 |
 | Abandon a tool after abort | 2 s | — | Constant, proposed | Section 8.4 |
-| SDK `maxRetries` | 0 | — | Constant | A-C7 |
+| SDK `maxRetries` | 0 | — | Constant | Section 9.2; deliverable 09, section 9.1 |
 | Retry attempts; total wait | 5 (3 for timeouts); 120 s | 1 to 10 | Config `retry.maxAttempts`, `retry.maxWaitMs` | Deliverable 09, section 9.1 |
 | Back-off; longest single wait | 2 s doubling to 10 s, ±20 %; 60 s | — | Constants | Deliverable 09, section 9.1 |
 | First part timeout | 60 s hosted; 300 s `ollama`, `lmstudio` | — | Constant per provider kind | Section 9.2, proposed |
 | Stall notice; stall abort | 20 s; 90 s | — | Constants, proposed | Section 9.2 |
 | OAuth callback wait | 5 min | — | Constant | Deliverable 01, section 4.2 |
 | Ctrl+C exit window | 2 s | — | Constant | FR-UI-05 |
-| Type-ahead discard | 300 ms after a dialog opens | — | Constant | A-S7 |
+| Type-ahead discard | 300 ms after a dialog opens | — | Constant | Deliverable 02, section 3.10 |
 | Short lock wait | 2 s in 50 ms steps | 0.5 s during shutdown | Constant | Deliverable 04, section 6.4 |
-| Shutdown watchdog; crash watchdog | 5 s; 3 s | Step bounds in section 10.3 | Constants, proposed | Q03-7 |
-| Approval secret | 32 random bytes per process | — | Constant | A-S8 |
+| Shutdown watchdog; crash watchdog | 5 s; 3 s | Step bounds in section 10.3 | Constants, proposed | Section 10.3, RT-D14 |
+| Approval secret | 32 random bytes per process | — | Constant | Section 4.5 |
 | `PLAIN` back-pressure threshold | 1 MiB buffered | — | Constant, proposed | Section 2.4 |
 | Debug log; crash report | 10 MiB with one rotation; 64 KB | — | Constants | Deliverable 04, section 12 |
 
@@ -1244,7 +1255,7 @@ Mock-model pattern for a turn with an approval:
 import { MockLanguageModelV4, convertArrayToReadableStream } from 'ai/test';
 
 const usage = { inputTokens: { total: 120, noCache: 120, cacheRead: 0, cacheWrite: 0 },
-                outputTokens: { total: 12, text: 12, reasoning: 0 } };      // V4 shape (research B 8)
+                outputTokens: { total: 12, text: 12, reasoning: 0 } };      // V4 shape
 const script = [
   [{ type: 'tool-call', toolCallId: 'c1', toolName: 'write_file', input: '{"path":"a.txt","content":"x"}' },
    { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool_calls' }, usage }],
@@ -1258,7 +1269,7 @@ const model = new MockLanguageModelV4({
 // the session event, stepsUsed === 2, one usage record. Answer No: execution-denied reaches the model, no file.
 ```
 
-The stream-part shapes in the script follow the AI SDK 6 provider specification. P0 pins the V4 fixtures; research B 8 notes that v6 fixtures need rewriting.
+The stream-part shapes in the script follow the AI SDK 6 provider specification. P0 pins the V4 fixtures, because fixtures written for v6 need rewriting.
 
 | Layer | Scope | Real | Faked |
 |---|---|---|---|
@@ -1277,40 +1288,42 @@ The headless test of deliverable 01, section 8.3 (core loaded without Ink or Rea
 | ID | Decision | Reason | Alternative rejected |
 |---|---|---|---|
 | RT-D1 | One async turn runner in `SC`. Agent rebuilt per stream call with `isStepCount(maxSteps − stepsUsed)`. Tool set and instruction sources fixed for the turn | Implements FR-AGT-02 across resumptions (SD-D5). Byte-identical prefix keeps the provider prompt cache within the turn | Re-reading context sources on every resumption |
-| RT-D2 | `stepsUsed` counts `onStepEnd` callbacks | The same unit the SDK uses for `isStepCount`, whatever it does with approved tools (Q07-1) | Counting model requests in `RTY` |
+| RT-D2 | `stepsUsed` counts `onStepEnd` callbacks | The same unit the SDK uses for `isStepCount`, whatever it does with approved tools | Counting model requests in `RTY` |
 | RT-D3 | An approval request raised in the last allowed step is closed unrun, with a synthetic result and the cap message; no dialog | The user never approves something that then cannot run; AC-33's stop message stays | A dialog plus one extra step; removing tools on the last step |
-| RT-D4 | The first user message of a process waits up to 5 s for the initial `.env` scan, then is sent with the values known so far and a notice (answers Q05-6) | Pasted `.env` values are masked before the first request and before the first write. A huge repository cannot block the first answer | Sending at once; an unbounded wait |
+| RT-D4 | The first user message of a process waits up to 5 s for the initial `.env` scan, then is sent with the values known so far and a notice | Pasted `.env` values are masked before the first request and before the first write. A huge repository cannot block the first answer | Sending at once; an unbounded wait |
 | RT-D5 | Side-effecting calls (writes, every `shell`, every MCP tool) take one FIFO lock ordered by call index. Read-only built-ins run up to 4 at once | Audit order equals call order (HLD-D17, INV-21). Parallel reads stay fast for models that batch calls | Serialising everything; trusting MCP read-only hints for parallelism |
 | RT-D6 | After a command's leader exits, `PSV` kills whatever remains in its process group and tells the model | No stray background processes; second line behind the detach refusal | Leaving survivors until shutdown |
-| RT-D7 | Every program is spawned by absolute path, resolved outside the workspace | On Windows a bare name is searched in the working directory first (Q07-8); a planted `taskkill.exe` or `rg.exe` must not run | Spawning by name |
+| RT-D7 | Every program is spawned by absolute path, resolved outside the workspace | On Windows a bare name is searched in the working directory first (to be confirmed in the P0 spike); a planted `taskkill.exe` or `rg.exe` must not run | Spawning by name |
 | RT-D8 | `LIFE` ignores SIGINT while a terminal lease is active | `sudo -v` shares antai's process group, so the user's Ctrl+C would otherwise stop antai too | Spawning `sudo -v` detached (it would have no terminal) |
 | RT-D9 | Command completion: the leader's `exit`, then the group sweep, then at most 500 ms of pipe drain | A grandchild holding stdout cannot stall the call until the timeout | Waiting for `close` |
 | RT-D10 | Cancellation is a tree of `AbortController`s with typed reasons. Tools that ignore the signal are abandoned after 2 s | One mechanism for Esc, timeouts and shutdown; markers say what happened | Separate flags per component |
-| RT-D11 | Stall watchdog: first part within 60 s (300 s for local providers), notice after 20 s of silence, abort after 90 s | Gives deliverable 09's "timeout" class concrete triggers; answers SD-16c's open note | No watchdog (a hung stream would hold the turn until Esc) |
+| RT-D11 | Stall watchdog: first part within 60 s (300 s for local providers), notice after 20 s of silence, abort after 90 s | Gives deliverable 09's "timeout" class concrete triggers; used by deliverable 03, SD-16c | No watchdog (a hung stream would hold the turn until Esc) |
 | RT-D12 | The tool-output `.env` gate never opens on a timer; a notice appears after 10 s and Esc stays available | No unredacted tool output (HLD-D21), and the user keeps control | Opening the gate after a timeout |
-| RT-D13 | Internal errors caught inside a turn end only that turn, with a crash report. Uncaught errors take the FR-ERR-04 crash path | One bug degrades one turn (NFR-REL-02). `TurnState` is discarded and `SessionState` changes only when idle | Exiting on every internal error (Q07-7) |
-| RT-D14 | Shutdown: fixed order with per-step bounds; MCP close in parallel with command kills; 5 s watchdog; a second signal forces exit | Answers Q03-7. Fits inside Windows' console-close window. A hung server cannot hold the exit | Unbounded graceful shutdown |
+| RT-D13 | Internal errors caught inside a turn end only that turn, with a crash report. Uncaught errors take the FR-ERR-04 crash path | One bug degrades one turn (NFR-REL-02). `TurnState` is discarded and `SessionState` changes only when idle | Exiting on every internal error |
+| RT-D14 | Shutdown: fixed order with per-step bounds; MCP close in parallel with command kills; 5 s watchdog; a second signal forces exit | Fits inside Windows' console-close window. A hung server cannot hold the exit | Unbounded graceful shutdown |
 | RT-D15 | The entry chunk excludes `ai`, providers, Ink, MCP, the parser and the tokenizer. The agent and provider chunk, parser and tokenizer are preloaded after the first frame; `AG.create` stays synchronous | Meets section 10.1's budget with room to spare; the first answer does not pay the import | Loading on first use only; loading everything at start |
 | RT-D16 | Back-pressure: the core never waits for interactive renderers. `PLAIN` pauses the model stream through a drain port above 1 MiB | Interactive latency stays low; piped JSON cannot grow memory without bound | Unbounded buffering in `PLAIN` |
 | RT-D17 | Scenario tests use a `mock:` provider compiled only into the test build | No test hook in the shipped package (NFR-SEC-04) | An environment variable that switches the model in release builds |
 | RT-D18 | Tools write effect records through an `EffectRecorder` in `ToolContext`, implemented by `SC`: audit first, then session | Keeps the import rules of deliverable 01, section 8.2. One place enforces the write order of deliverable 04, section 6.6 | Tools importing `HS` and `AUD` directly |
-| RT-D19 | The `toolApproval` wrapper answers repeat calls from `TurnState.decisions` and fails closed on a policy exception. `POL.decide` keeps its asynchronous read-only ports (answers Q06-7) | Same answer if the SDK asks again (Q03-3). A bug denies instead of running. Live audit health and symlink checks | Pre-resolving facts in `AG` |
+| RT-D19 | The `toolApproval` wrapper answers repeat calls from `TurnState.decisions` and fails closed on a policy exception. `POL.decide` keeps its asynchronous read-only ports | Same answer if the SDK asks again. A bug denies instead of running. Live audit health and symlink checks | Pre-resolving facts in `AG` |
 
 ---
 
 ## 14. Open questions
 
+No answer is expected soon. Each row's default is what this document uses; nothing here waits on an answer.
+
 | ID | Question | Options | Default assumed | Owner |
 |---|---|---|---|---|
-| Q07-1 | Does the SDK execute approved tools inside the first step of the continuation call, or before it (unverified)? | Inside; before | Irrelevant to the count (RT-D2); P0 records it for the tests | P0 spike |
+| Q07-1 | Does the SDK execute approved tools inside the first step of the continuation call, or before it? | Inside; before | Irrelevant to the count (RT-D2); P0 records it for the tests | P0 spike |
 | Q07-2 | Does `ToolLoopAgent` in `ai@7.0.137` accept `maxOutputTokens` as a setting? Deliverable 06, section 5.3 verified the other options; this one is not in its list | Setting; through `prepareCall`; per `stream()` call | Setting, with `prepareCall` as the fallback | P0 spike |
 | Q07-3 | Is deliverable 09's provisional `maxOutputTokens` of 4,096 for gpt-oss on Groq right? Reasoning tokens count as output, and the maximum counts against 8,000 tokens per minute | Keep 4,096; lower it; vary it by effort level | 4,096 (deliverable 09, section 4.2); P0 tunes it with a 10-step turn (FR-MOD-02) | Deliverable 09, P0 spike |
 | Q07-4 | Should `SR` strip ANSI escape sequences from command output before redaction and the cap? | Strip; keep | Keep in v1 (FR-SH-08 is silent); strip if P0 token measurements show a cost | Deliverables 08 and 12 |
-| Q07-5 | Which exit codes do signal-triggered exits use? FR-UI-06 lists 0 to 5 only | 128 + signal (130, 129, 143); 1; the turn's code | 130 for SIGINT in `run`, 129 for SIGHUP, 143 for SIGTERM; `/exit` and Ctrl+C twice exit 0 | Deliverable 11 |
+| Q07-5 | Which exit codes do signal-triggered exits use? FR-UI-06 lists 0 to 5 only | 128 + signal (130, 129, 143); 1; the turn's code | 130 for SIGINT in `run`, 129 for SIGHUP, 143 for SIGTERM; `/exit`, Ctrl+C twice and Ctrl+D twice exit 0 | Deliverable 11 |
 | Q07-6 | [USER] On the last allowed step, should antai remove all tools so the model writes a final answer, instead of stopping mid-task? | Stop with the cap message; force a final answer | Stop (AC-33 expects the stop message) | Daksh |
 | Q07-7 | [USER] Should an internal error inside a turn end only that turn (RT-D13), or stop antai as FR-ERR-04 describes? | Contain; exit | Contain, with a crash report and an error line | Daksh |
-| Q07-8 | On Windows, does libuv search the child's working directory before `PATH` for a bare program name? Read from libuv source, not tested | Yes; no | Yes; RT-D7 applies either way | P0 spike |
-| Q07-9 | Does `INK`'s `suspendTerminal()` leave the terminal in a state where Ctrl+C reaches `sudo` as SIGINT? Does `LINE`'s paused reader do the same (unverified)? | Yes; needs an explicit `setRawMode(false)` | Yes: raw mode is turned off (research F 3.3) | P0 spike |
+| Q07-8 | On Windows, does libuv search the child's working directory before `PATH` for a bare program name? Expected from libuv's Windows spawn rules, not tested | Yes; no | Yes; RT-D7 applies either way | P0 spike |
+| Q07-9 | Does `INK`'s `suspendTerminal()` leave the terminal in a state where Ctrl+C reaches `sudo` as SIGINT? Does `LINE`'s paused reader do the same? | Yes; needs an explicit `setRawMode(false)` | Yes: raw mode is turned off | P0 spike |
 
 Questions from other deliverables answered or narrowed here:
 
@@ -1325,7 +1338,7 @@ Questions from other deliverables answered or narrowed here:
 | Q06-4 | Section 4.4: both handled |
 | Q06-7 | RT-D19 |
 
-Used unchanged: Q01-2, Q01-3, Q01-5, Q01-8 (deliverable 02, SEC-D14), Q01-9 (deliverable 10), Q01-19, Q01-20, Q01-21 (deliverable 02, SEC-D15), Q01-22, Q04-7, Q05-2.
+Choices from other deliverables used here as stated: antai's own stdio MCP transport, with the SDK transport as the fallback (HLD-D8; section 7.9); a captured `sudo` command runs with `sudo -n` and without `detached` (deliverable 03, SD-11; sections 7.2 and 7.7); provider-key variables the user exported stay in child environments (section 7.3); streamed text is held back as deliverable 02, SEC-D14 says (section 5.2); `run` waits for each MCP server up to its start-up timeout (deliverable 10); one turn at a time, with no queue (HLD-D18); the Windows tree kill is `taskkill`, plus a sweep for known MSYS children if P0 shows survivors (section 7.4); known `.env` values are re-checked by modification time per turn and after each command (deliverable 02, SEC-D15); a static check drops unsafe project `secrets.patterns` with a warning (deliverable 02, SEC-D16); on Windows, `process.kill(pid, 0)` on the root is the liveness probe, confirmed in the P0 spike (section 7.4); a stdio MCP server gets the same environment base as a command (section 7.3).
 
 ---
 
@@ -1339,12 +1352,12 @@ Used unchanged: Q01-2, Q01-3, Q01-5, Q01-8 (deliverable 02, SEC-D14), Q01-9 (del
 | FR-AGT-04, AC-32 | 3.3, 8.1 to 8.4 |
 | FR-AGT-05, FR-AGT-06 | 4.3, 9.1 |
 | FR-AGT-07 | 6.4, 9.1 |
-| FR-MOD-02, CR-01 | 4.1, 9.2, 11, Q07-3 |
+| FR-MOD-02, CR-01 | 4.1, 9.2, 11 |
 | FR-MOD-05, FR-MOD-06 | 3.5, 4.1, 4.3, 5.3 |
 | FR-MODE-01..03 | 3.1, 3.5, 4.6 |
 | FR-SH-02..04, FR-SH-10 | 3.4, 4.4, 6.4 |
 | FR-SH-06, FR-SH-07, AC-29 | 6.3, 7.2 to 7.6 |
-| FR-SH-08, A-S6 | 2.5, 6.1, 11 |
+| FR-SH-08 (redact, then cap) | 2.5, 6.1, 11 |
 | FR-SH-09 | 7.2, 7.7 |
 | FR-SEC-03, FR-SEC-04, NFR-SEC-05 | 2.5, 5.2, 6.1, 7.3 |
 | FR-TOOL-01..11 | 4.6, 6.2, 6.3, 11 |
@@ -1352,11 +1365,11 @@ Used unchanged: Q01-2, Q01-3, Q01-5, Q01-8 (deliverable 02, SEC-D14), Q01-9 (del
 | FR-HIS-02, FR-HIS-13, AC-17 | 3.3, 6.1, 8.3, 9.4 |
 | FR-CLI-02, FR-CLI-03 | 2.2, 8.2, 10.1 |
 | FR-UI-05 | 8.2, 10.3 |
-| FR-UI-06 | 2.4, 5.3, 9.1, Q07-5 |
+| FR-UI-06 | 2.4, 5.3, 8.2, 9.1 |
 | FR-UI-08 | 6.1 |
 | FR-ERR-01, FR-ERR-02, AC-21 | 9.1 to 9.3 |
 | FR-ERR-03 | 2.3, 4.1 |
-| FR-ERR-04 | 9.4, Q07-7 |
+| FR-ERR-04 | 9.4, RT-D13 |
 | NFR-PERF-01 | 10.1, 10.2 |
 | NFR-PERF-02 | 2.3, 2.4, 5.2 |
 | NFR-PERF-04 | 2.5 |
@@ -1366,35 +1379,14 @@ Used unchanged: Q01-2, Q01-3, Q01-5, Q01-8 (deliverable 02, SEC-D14), Q01-9 (del
 | NFR-MNT-01, NFR-MNT-02 | 1.4, 12 |
 | NFR-SEC-04 | 4.5, 12 |
 | D18, D19, D27, D30 | 2.2, 3.5, 11 |
-| A-C1..C3, A-C5, A-C7, A-C8 | 4, 5, 9.2 |
-| A-S5, A-S7, A-S8 | 7.3, 11, 4.5 |
+| AI SDK v7 API names; SDK `maxRetries: 0` with antai's own retry | 4, 5, 9.2 |
+| Keys never in `process.env`; type-ahead discard; approval secret | 7.3, 11, 4.5 |
 | HLD-D1, HLD-D2, HLD-D5..D7, HLD-D17, HLD-D18, HLD-D21 | 2, 3, 4, 6, 7, 9 |
 | Deliverable 06, INV-2, 3, 5, 10, 12, 15, 17..21 | 3, 4.3, 6, 7, 9.2 |
-| Q01-4, Q03-1..3, Q03-7, Q05-6, Q06-4, Q06-7 | 8.2, 4.3, 3.3, 4.4, 10.3, 5.2 |
+| Other deliverables' questions settled here | 14 |
 
 ---
 
 ## 16. Sources
 
-Research notes (checked 12 and 13 October 2026), which carry the full source lists:
-
-- Research B, stack verification: `ToolLoopAgent`, `agent.stream()`, `isStepCount`, `prepareStep`, `toolApproval` statuses, `experimental_toolApprovalSecret`, `pruneMessages`, usage fields, `MockLanguageModelV4`, Ink 8.
-- Research C, providers: Groq free-plan limits and headers; gpt-oss without parallel tool calls.
-- Research D, section 7: process-tree killing on POSIX and Windows, `taskkill`, Job Objects, MSYS grandchildren.
-- Research E, sections 4 and 6: runtime structure, cancellation keys, start-up practice, retry policies of other agents, the AI SDK's own retry behaviour, stall banners.
-- Research F, sections 3, 5 and 6: Ink `exitOnCtrlC` and `suspendTerminal()`, Groq token accounting, token estimation, v7 callbacks and telemetry.
-
-Primary sources used directly:
-
-- AI SDK v7 type definitions: https://unpkg.com/ai@7.0.137/dist/index.d.ts
-- AI SDK `ToolLoopAgent` reference: https://ai-sdk.dev/docs/reference/ai-sdk-core/tool-loop-agent
-- AI SDK tool approvals: https://ai-sdk.dev/docs/agents/tool-approvals
-- AI SDK testing: https://ai-sdk.dev/docs/ai-sdk-core/testing
-- Node.js process signal events (`SIGHUP` on Windows console close, `SIGBREAK`, `SIGTERM` on Windows): https://nodejs.org/api/process.html#signal-events
-- Node.js `AbortSignal.any()` and `AbortSignal.timeout()`: https://nodejs.org/api/globals.html#class-abortsignal
-- Node.js `child_process` (`detached`, `windowsHide`, `kill`): https://nodejs.org/api/child_process.html
-- Node.js `perf_hooks.monitorEventLoopDelay()`: https://nodejs.org/api/perf_hooks.html#perf_hooksmonitoreventloopdelayoptions
-- libuv Windows process spawning (`search_path`): https://github.com/libuv/libuv/blob/v1.x/src/win/process.c
-- `taskkill`: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/taskkill
-- Groq rate limits: https://console.groq.com/docs/rate-limits
-- Ink 8.0.0 release: https://github.com/vadimdemedes/ink/releases/tag/v8.0.0
+External facts in this document (package versions, provider limits, API names, Node and operating-system behaviour) were checked on 12 and 13 October 2026 and are stated where they are used; the P0 spike re-checks the ones the design depends on.

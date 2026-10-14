@@ -1,13 +1,15 @@
 # Open questions for Daksh
 
+No answer is expected soon. The deliverables use each default below as the decision and state it directly; nothing in them waits on this file.
+
 Work did not stop on any of these. Each one shows the default I used. Write your answer under it and I will apply it.
 
 ## U-01 · Two similar file names
 
-The register is at `docs/DELIVERABLES_1.md`, which you approved. The compiled design set is at `docs/deliverables/DELIVERABLE_1.md`, which you asked for. The two names differ by one letter.
+The register is at `docs/Deliverables/00_DELIVERABLES_1.md`, which you approved. A compiled design set, which you asked for, would be named `DELIVERABLE_1.md`; it has not been made, and the repository holds only the separate files 00 to 16. Apart from the number prefix, the two names differ by one letter (`DELIVERABLES` and `DELIVERABLE`).
 
 - **Default used:** keep both names as given.
-- **Other option:** rename the register to `docs/DELIVERABLES_REGISTER_1.md`.
+- **Other option:** rename the register to `docs/Deliverables/00_DELIVERABLES_REGISTER_1.md`.
 - **Answer:**
 
 ## U-02 · Register items still unconfirmed
@@ -17,17 +19,17 @@ You confirmed the file name and the eval pass bar. These are still only proposed
 - review windows of 3 working days, or 5 for security items;
 - a team of at least 2 people;
 - a 30-day stabilisation window after v1.0.0;
-- Q7 (macOS runner), Q8 (Groq free plan as default) and Q9 (`@geekyants/antai`).
+- Q8 (macOS runner), Q9 (Groq free plan as default) and Q10 (`@geekyants/antai`).
 
 - **Default used:** treated as proposed. The design docs assume them.
 - **Answer:**
 
-## U-03 · BRD review items that are not agreed yet
+## U-03 · Additions beyond the BRD that are not agreed yet
 
-BRD review batch 4 onwards, ARCHITECTURE_1 corrections A-C1..C14, gaps A-S1..S11 and register CR-01..CR-16 are proposals.
+The design's additions beyond BRD v0.4 are proposals: the AI SDK v7 API names it uses, the extra safety checks (for example `bash <file>` and `source <file>` as Dangerous, the per-process approval secret, denying side effects when the audit log cannot be written), and register CR-01..CR-16.
 
-- **Default used:** the design docs assume the proposed fix and label it "pending BRD review".
-- **Other option:** design only to BRD v0.3 as written.
+- **Default used:** the design docs use the proposed fix and label it "beyond the BRD".
+- **Other option:** design only to the BRD as written.
 - **Answer:**
 
 ## U-04 · GitLab version on git.geekyants.com
@@ -42,16 +44,16 @@ GitLab 18.0–18.10 renders Mermaid 10.7. GitLab 19.x renders Mermaid 11. Diagra
 - **U-05 (Q01-5)** · Remove provider-key variables the user exported from command environments? · Default: keep them; remove only antai's own variables. · **Answer:**
 - **U-06 (Q01-6)** · Keep the line-mode renderer as a user-facing fallback after P5? · Default: automatic fallback with a notice, no new flag. · **Answer:**
 - **U-07 (Q01-14)** · Will GeekyAnts host an HTTPS client document, so MCP OAuth can use Client ID Metadata Documents? · Default: defer to v1.1 and use dynamic registration. · **Answer:**
-- **U-08 (Q01-16)** · When a server with `trustReadOnlyHints` changes a tool's annotations, does that tool lose Safe until you accept the change? · Default: yes, and the tool stays available at Normal. · **Answer:**
+- **U-08 (Q01-16)** · When a server with `trustReadOnlyHints` changes a tool's annotations, does that tool lose Safe until you accept the change? · Default: yes, and the tool stays available at Normal. Now in BRD v0.4 (FR-MCP-06). · **Answer:**
 - **U-09 (Q01-18)** · BRD P2 says approvals are "tested through the plain renderer", which has no human. Change it to the line-mode renderer? · Default: line-mode renderer. · **Answer:**
 - **U-10 (Q01-19)** · A prompt typed while a turn is running: queue it or refuse it? · Default: refuse. · **Answer:**
-- **U-11** · BRD v0.4 arrived after the register (`docs/DELIVERABLES_1.md` v0.2, based on v0.3) was copied. Its phase mapping, AC range (now AC-01..35) and Q6 are stale. · Default: I refresh the register to v0.4 at the end of this run. · **Answer:**
+- **U-11** · BRD v0.4 arrived after the register (`docs/Deliverables/00_DELIVERABLES_1.md` v0.2, based on v0.3) was copied. Its phase mapping, AC range (now AC-01..35) and Q6 are stale. · Default: done: the register (v0.3) follows BRD v0.4. · **Answer:**
 
 ## From 04 Data & Storage
 
 - **U-12 (Q04-1)** · Adopt an append-only `index.jsonl` instead of rewriting `index.json`? · Default: keep `index.json` for v1. · **Answer:**
 - **U-13 (Q04-2)** · Write response messages after every step (a change to FR-HIS-02's "when the turn ends")? · Default: after each stream call, which includes before every approval dialog. · **Answer:**
-- **U-14 (Q04-3)** · Read `history.retentionDays` and `audit.retentionDays` only from global config, so a cloned repo can't shorten them? · Default: global only. · **Answer:**
+- **U-14 (Q04-3)** · Read `history.retentionDays` and `audit.retentionDays` only from global config, so a cloned repo can't shorten them? · Default: global only. Now in BRD v0.4 (FR-CFG-01). · **Answer:**
 - **U-15 (Q04-5)** · Make tool reads of `~/.antai/sessions`, `audit` and `logs` at least Normal tier, even when the workspace is the home folder? · Default: Normal. · **Answer:**
 - **U-16 (Q04-9)** · Deny side-effecting calls when the audit log cannot be written? · Default: deny. · **Answer:**
 - **U-17 (Q04-10)** · Keep prompt history (up arrow) across sessions? · Default: current session only. · **Answer:**
@@ -66,7 +68,7 @@ GitLab 18.0–18.10 renders Mermaid 10.7. GitLab 19.x renders Mermaid 11. Diagra
 
 ## From 05 Data Flow Diagrams
 
-- **U-23 (Q05-4)** · The research doesn't cover training and retention terms for OpenAI, Anthropic and the OpenAI-compatible presets. Research them before P6? · Default: yes; until then the docs link to each provider's terms. · **Answer:**
+- **U-23 (Q05-4)** · Training and retention terms for OpenAI, Anthropic and the OpenAI-compatible presets have not been checked yet. Check them before P6? · Default: yes; until then the privacy note (DLV-DOC-06) tells users to read each provider's own terms. · **Answer:**
 - **U-24 (Q05-5)** · A free Gemini key can't be told from a paid one. How should antai show the free-tier data-use notice? · Default: one line at the first `google` request of each session. · **Answer:**
 - **U-25 (Q05-7)** · Should network commands (`git push`, `curl` downloads) ask at least once in `auto` mode? · Default: keep the BRD as is and state it in the privacy note. · **Answer:**
 - **U-26 (Q05-10)** · Shorten the home folder to `~` in paths sent to the provider? · Default: no change in v1; state it in the privacy note. · **Answer:**
@@ -99,8 +101,8 @@ GitLab 18.0–18.10 renders Mermaid 10.7. GitLab 19.x renders Mermaid 11. Diagra
 
 - **U-42 (Q02-1)** · Who signs the residual-risk acceptance (BRD Q7), and who is the independent Security reviewer? · Default: Product owner signs on the reviewer's recommendation; reviewer to be named. · **Answer:**
 - **U-43 (Q02-2)** · Running a file the model wrote earlier in the session (`bash cleanup.sh`): Dangerous? · Default: no; documented as residual risk RR-03. · **Answer:**
-- **U-44 (Q02-3)** · Accept the extra protected paths (shell start-up files, `~/.gitconfig`, `.envrc`, `.husky/`, `.vscode` settings, other agents' folders)? Also protect CI files? · Default: the additions, not CI files. · **Answer:**
-- **U-45 (Q02-5)** · Should `ANTAI_MODE=auto` be refused (FR-CFG-05 doesn't list env vars as a source of `auto`)? · Default: refuse. · **Answer:**
+- **U-44 (Q02-3)** · Accept the extra protected paths (shell start-up files, `~/.gitconfig`, `.envrc`, `.husky/`, `.vscode` settings, other agents' folders)? Also protect CI files? · Default: the additions, not CI files. Now in BRD v0.4 as a list that might grow (FR-TOOL-11). · **Answer:**
+- **U-45 (Q02-5)** · Should `ANTAI_MODE=auto` be refused ? · Default: refuse. Now in BRD v0.4 (FR-CFG-05). · **Answer:**
 
 ## From 07 Agent Runtime
 

@@ -8,7 +8,8 @@
 | **Version** | 0.1 |
 | **Date** | 12 October 2026 |
 | **Author** | Daksh Nagpal |
-| **Based on** | BRD_1 v0.4, ARCHITECTURE_1 v0.1, DELIVERABLES_1 v0.2, deliverables 01, 02, 03, 04, 06, 07, 09 and 10 (v0.1), research notes B, E and F |
+| **Based on** | BRD_1 v0.4, HLD.png, deliverables 00, 01, 02, 03, 04, 06, 07, 09 and 10 (v0.1) |
+| **How to use** | Reference design, not a fixed rail. Where the technology needs something different or extra, the implementation may change it; the change is then made in every deliverable it touches, so the set keeps agreeing. |
 
 ## Contents
 
@@ -38,9 +39,9 @@
 
 ### 1.1 Purpose
 
-antai has no HTTP API. Its "API contracts" are the typed interfaces between its components, the `--json` event stream that scripts read, the files users write, the error codes and the exit codes. This document fixes them exactly, so that two developers implementing the two sides of a boundary write compatible code, and so that a script written against `antai run --json` keeps working across releases.
+antai has no HTTP API. Its "API contracts" are the typed interfaces between its components, the `--json` event stream that scripts read, the files users write, the error codes and the exit codes. This document fixes them exactly, so that two developers implementing the two sides of a boundary write compatible code, and so that a script written against `antai run --json` keeps working across releases. In the hand-drawn architecture `HLD.png`, these are the contracts of the Event Bus (`events/`) and of the arrows between the other boxes.
 
-Deliverable 06 shows the same types as diagrams (structure and state machines) and calls its member names proposals for this document to fix. This document is the exact contract: where the two differ, this document wins and 06 is corrected. This document keeps 06's event names (`turn-start`, `tool-result`, `tool-denied`, `approval`, `turn-end`) and adds what 06 leaves open, for example an end event per text block (`text-end`) and a pure `POL.decide` over facts gathered per call (section 7.1, answering Q06-7); IC-D24 lists the differences.
+Deliverable 06 shows the same types as diagrams (structure and state machines) and calls its member names proposals for this document to fix. This document is the exact contract: where the two differ, this document wins and 06 is corrected. This document keeps 06's event names (`turn-start`, `tool-result`, `tool-denied`, `approval`, `turn-end`) and adds what 06 leaves open, for example an end event per text block (`text-end`) and the `CallFacts` that `POL.decide` reads for each call through its read-only ports (section 7.1). Where member names differ from 06's proposals, the names here apply.
 
 ### 1.2 Scope
 
@@ -70,10 +71,12 @@ Deliverable 06 shows the same types as diagrams (structure and state machines) a
 | CP6 | **Schemas come from Zod.** Config, MCP files, frontmatter, session records and the NDJSON events are defined once in Zod; validation and the published JSON Schemas are generated from the same definition | DLV-SW-09, HLD-D13 |
 | CP7 | **Evolution is additive.** Readers ignore unknown fields, record types and event types. Renaming, removing or changing the meaning of a field is a breaking change with a version bump (section 14) | Sessions, audit files and scripts outlive releases |
 | CP8 | **Plain data across boundaries.** Events, records and results are JSON-serialisable, read-only plain objects: no class instances, `Error` objects, functions or SDK objects, with two named exceptions (`Secret` and `TerminalLease`) | Events can be logged, compared in tests and serialised to NDJSON without custom code |
-| CP9 | **Pure where deliverable 01 says pure.** `POL.decide`, `CLS.classify` and `PG.checkPath` take every fact as input and do no I/O; the facts are gathered per call just before (section 7.1) | Table-driven tests (NFR-SEC-01) and deterministic decisions (HLD-D4, deliverable 02, section 3.9) |
+| CP9 | **No side effects where deliverable 01 says so.** `CLS.classify` and `PG.checkPath` take every fact as input and do no I/O. `POL.decide` changes nothing and reads live facts only through read-only ports, faked in tests (section 7.1; deliverable 07, RT-D19) | Table-driven tests (NFR-SEC-01) and deterministic decisions (HLD-D4, deliverable 02, section 3.9) |
 | CP10 | **SDK names stay inside.** Only `EVM` switches on AI SDK stream-part names, only `AG` builds SDK approval statuses, only `src/sdk/` imports experimental SDK names | AI SDK churn (risk TR1) touches one place |
 
-### 1.4 Items in this document pending BRD review
+### 1.4 Additions beyond BRD v0.4
+
+These go beyond BRD v0.4. The design uses them as stated; the BRD can adopt them later.
 
 | Ref | Item | BRD baseline | Section |
 |---|---|---|---|
@@ -84,11 +87,17 @@ Deliverable 06 shows the same types as diagrams (structure and state machines) a
 | IC-P5 | `schemaVersion` on every NDJSON line, not only the first; every `tool-call` paired with one `tool-result`, including denied calls; a `result` field on `done` | FR-UI-06 requires `schemaVersion` on the first event and names seven types; these are compatible additions | 5 |
 | IC-P6 | An eighth NDJSON type, `notice`, for warnings and information (extension findings, MCP failures and drift, provider data-use and unsupported-setting notices) | FR-UI-06 names seven types; deliverables 09 and 10 need a slot for notices | 5.3 |
 
-Items from other documents used here unchanged: A-C3, A-C5, A-C7, A-C8 (SDK names), A-S5 (keys outside `process.env`), A-S6 (redact, then cap), A-S7 (type-ahead discard), A-S8 (approval signing), deliverable 04 P7 (audit failure denies side effects).
+Additions from other documents used here unchanged: the AI SDK v7 API names as used by antai (`result.stream`, nested usage fields, `tool-output-denied`), the SDK's `maxRetries: 0` with antai's own retry wrapper (`RTY`), provider keys kept out of `process.env` and child environments (the latter now in BRD v0.4, FR-SH-06), redact first and then cap, type-ahead discarded when a dialog opens, a per-process approval signing secret, and deliverable 04 P7 (audit failure denies side effects).
 
 ---
 
 ## 2. Contract map
+
+The two maps refine the hand-drawn architecture in `HLD.png` (deliverable 01, section 1.3 maps every box): Screen UI is `INK`, `LINE` and `PLAIN`; Event Bus is `BUS`; Session is `SC` with `APR`, `SLASH` and `USG`; Agent Brain is `AG` with `EVM`; Model Gateway is `REG`, `CAT` and `RTY`; the Tool Pipeline is `POL` (Safety Guard), `TREG` (Tool Service) and `RED` (Secret Filter). Three points differ from the drawing, each for a reason:
+
+- `EVM` emits stream events onto `BUS` itself instead of passing them through `SC`, so streamed text reaches the screen without an extra hop; `SC` still owns turns, approvals and storage.
+- The Safety Guard returns a decision (`POL.decide`) instead of calling the tool itself, so the SDK's approval round trip can stop for a dialog and `decide` stays free of side effects and table-tested with faked ports (section 7.1).
+- API keys are read through `CRED` (`src/infra/credentials/`), a store with its own lock and file mode, rather than through `config/`; and `src/cli/`, `src/sdk/` and `src/shared/` hold the entry point, the SDK shim and the shared kernel (types, errors, messages), which no box in the drawing owns; `src/rules/` holds the Safety Guard's rule data in a folder of its own (deliverable 01, section 1.3).
 
 ### 2.1 IC-1a Presentation, session and public outputs
 
@@ -152,13 +161,13 @@ flowchart LR
     TREG["⑤ TREG"]
     BT["⑤ BT · MA"]
     RED["⑦ RED"]
-    ST["⑥ HS · AUD · CRED · TRUST"]
+    ST["⑥ HS · AUD · CRED · ① TRUST"]
     FSX["⑥ FSX"]
     ERR["SK ERR · MSG"]
     SC -- "TurnSnapshot, DecisionLedger" --> AG
     AG -- "languageModel()" --> REG
     REG -- "RetryMiddleware" --> RTY
-    AG -- "decide(call, snapshot, facts)" --> POL
+    AG -- "decide(call, snapshot)" --> POL
     POL -- "classify()" --> CLS
     POL -- "checkPath()" --> PG
     AG -- "ToolSet from AntaiTool[]" --> TREG
@@ -186,7 +195,7 @@ flowchart LR
 | `AgentEvent`, `UserCommand`, `InteractionRequest`, `InteractionResult`, `Renderer`, `CorePort`, `RendererPort` | `BUS` (`src/events/`) | `SC`, `APR`, `SLASH`, `USG`, `EVM`, `BOOT`, `INK`, `LINE`, `PLAIN` | 4 |
 | NDJSON v1 lines | `PLAIN` (`src/ui/plain/`) | Scripts and CI | 5 |
 | `AntaiTool`, `ToolContext`, `EffectRecorder`, `RawToolOutput`, `ToolResult`, `ToolPreviewer` | `TREG` (`src/tools/registry/`) | `BT`, `MA`, `AG`, `APR` (previews), `POL` (types) | 6 |
-| `decide`, `PolicyDecision`, `CallFacts`, `ClassifierResult`, `PathVerdict` | `POL`, `CLS`, `PG` (`src/safety/`) | `AG`, `APR` (types), `BT` (path re-check) | 7 |
+| `ApprovalPolicy` (`decide`), `PolicyPorts`, `CallFacts`, `PolicyDecision`, `ClassifierResult`, `PathVerdict` | `POL`, `CLS`, `PG` (`src/safety/`) | `AG`, `APR` (types), `BT` (path re-check) | 7 |
 | `Redactor`, `OutputFilter`, `StreamRedactor` | `RED` (`src/redact/`) | `TREG`, `EVM`, `CLI`, `HS`, `AUD`, `DBG`, `CRED`, `MCPM` | 7.4 |
 | `ModelRef`, `ModelEntry`, `ProviderRegistry`, `RetryMiddleware`, `Usage` | `REG`, `CAT`, `RTY` (`src/providers/`) | `AG`, `SC`, `SLASH`, `USG`, `PR` | 8 |
 | `TurnSnapshot`, `DecisionLedger`, `PendingApproval`, `ApprovalOutcome` | `SC`, `AG` | `AG`, `APR`, `TREG`, `EVM` | 8.5 |
@@ -199,7 +208,7 @@ flowchart LR
 
 ## 3. Shared vocabulary types
 
-Types used on both sides of the event boundary cannot live in `src/events/` (the core's lower layers may not import it) or in `src/safety/` (renderers may not import it). They live in the shared-kernel module `src/shared/domain/` that deliverable 06 introduced (UML-D3; new folder, not in deliverable 01, section 8.1; part of the existing shared kernel `SK`, not a new component). It holds types and pure helpers only and has no dependencies.
+Types used on both sides of the event boundary cannot live in `src/events/` (the core's lower layers may not import it) or in `src/safety/` (renderers may not import it). They live in the shared-kernel module `src/shared/domain/` that deliverable 06 introduced (UML-D3; listed in deliverable 01, section 8.1 as part of the shared kernel `SK`, not a new component). It holds types and pure helpers only and has no dependencies.
 
 ```ts
 // src/shared/domain/index.ts
@@ -229,7 +238,7 @@ export type SelectableMode = Exclude<Mode, 'skip'>;            // /mode, --mode,
 export type ProjectMode = 'research' | 'manual';               // what a project file may set (FR-CFG-05, FR-PRF-02)
 export type Tier = 'safe' | 'normal' | 'dangerous' | 'hard-floor';
 export type DialogKind = 'confirm' | 'danger';                 // dialog 1 and the red dialog 2 (FR-SH-03, 04)
-export type Effort = 'provider-default' | 'none' | 'low' | 'medium' | 'high';  // FR-MOD-06; A-C4 levels not exposed
+export type Effort = 'provider-default' | 'none' | 'low' | 'medium' | 'high';  // FR-MOD-06; the SDK's minimal, xhigh and max are not exposed
 export type ModelRefText = `${string}:${string}`;              // "groq:openai/gpt-oss-120b" (FR-MOD-03)
 export type DecisionBy = 'user' | 'mode' | 'session-allow' | 'policy' | 'no-human';  // deliverable 04, section 5.9
 export type ToolSource = { readonly kind: 'builtin' } | { readonly kind: 'mcp'; readonly server: string; readonly tool: string };
@@ -249,6 +258,8 @@ export interface RateLimitSnapshot {
   readonly observedAt: EpochMs;
   readonly remainingRequests: number | null;
   readonly remainingTokens: number | null;
+  readonly limitRequests: number | null;      // the plan's limits, for "remaining of limit" in /usage (deliverable 15, OBS-D21)
+  readonly limitTokens: number | null;
   readonly requestsResetAt: EpochMs | null;
   readonly tokensResetAt: EpochMs | null;
 }
@@ -383,6 +394,7 @@ export interface ToolResultEvent extends TurnScoped {
   readonly exitCode: number | null;           // shell only; a non-zero exit code is still status 'ok'
   readonly durationMs: number;
   readonly errorCode: ErrorCode | null;       // set when status is 'error'
+  readonly resultSummary: RedactedText | null;  // card note such as "4 matches", built by the tool; null when it gives none (deliverable 13, UI-11)
 }
 export interface ToolDeniedEvent extends TurnScoped {
   readonly type: 'tool-denied';               // the call never ran: policy, user, no human, or interrupted before a decision
@@ -397,7 +409,7 @@ export interface UsageEvent extends TurnScoped {
   readonly scope: 'step' | 'turn';
   readonly provider: ProviderId;
   readonly model: ModelRefText;
-  readonly usage: Usage;                      // this step, or the turn total (result.usage, A-C5)
+  readonly usage: Usage;                      // this step, or the turn total (result.usage)
   readonly sessionTotal: number;
   readonly context: { readonly lastInput: number | null; readonly window: number | null; readonly share: number | null };
   readonly rateLimit: RateLimitSnapshot | null;
@@ -411,6 +423,7 @@ export interface RetryScheduledEvent extends EventBase {
   readonly at: EpochMs;                       // absolute, so every renderer shows the same countdown (03, SD-16a)
   readonly reason: RetryReason;               // deliverable 09, section 9.4
   readonly code: ErrorCode;                   // the error that caused the retry, e.g. 'provider.rate_limited'
+  readonly limit: 'requests-per-minute' | 'tokens-per-minute' | null;  // which limit, when the provider says (deliverable 13, UI-26)
 }
 export type RetryReason =
   | 'rate-limit-minute' | 'token-budget' | 'server-error' | 'overloaded' | 'network' | 'timeout' | 'invalid-tool-call';
@@ -471,8 +484,8 @@ export type CommandView =
 export interface SessionEndedEvent extends EventBase {
   readonly type: 'session-ended';
   readonly sessionId: SessionId;
-  readonly reason: 'exit' | 'clear' | 'run-complete' | 'signal' | 'error';
-  readonly exit: null | { readonly code: ExitCode; readonly outcome: RunOutcome };  // null for /clear
+  readonly reason: 'exit' | 'clear' | 'resume' | 'run-complete' | 'signal' | 'error';  // 'error': a run stopped by an error (exit 1 or 3)
+  readonly exit: null | { readonly code: ExitCode; readonly outcome: RunOutcome };  // null for /clear and /resume
   readonly summary: {
     readonly turns: number; readonly steps: number; readonly toolCalls: number;
     readonly denials: number; readonly usage: Usage; readonly durationMs: number;
@@ -496,7 +509,7 @@ Why `tool-result` and `tool-denied` are separate (deliverable 06, UML-3a): a den
 export type UserCommand =
   | { readonly type: 'submit'; readonly text: string }      // raw input, unredacted; SLASH or SC decides what it is
   | { readonly type: 'interrupt'; readonly source: 'escape' | 'ctrl-c' }   // Esc, or Ctrl+C during a turn or dialog
-  | { readonly type: 'exit'; readonly source: 'ctrl-c-twice' }            // /exit arrives as submit text
+  | { readonly type: 'exit'; readonly source: 'ctrl-c-twice' | 'ctrl-d-twice' }   // /exit arrives as submit text; Ctrl+D twice on an empty input (deliverable 13, UI-D13)
   | { readonly type: 'answer'; readonly requestId: InteractionId; readonly result: InteractionResult };
 ```
 
@@ -524,7 +537,7 @@ export interface ApprovalRequest extends RequestBase {
   readonly preview: ApprovalPreview;
   readonly options: readonly ApprovalChoice[];   // confirm: yes, yes-session (Normal shell only, D27), no; danger: no, yes
   readonly initial: 'yes' | 'no';                // confirm: yes; danger: no
-  readonly discardTypeAheadMs: number;           // 300 (A-S7)
+  readonly discardTypeAheadMs: number;           // 300: type-ahead is discarded when a dialog opens
 }
 export type ApprovalChoice = 'yes' | 'yes-session' | 'no';
 export type ApprovalPreview =
@@ -543,11 +556,12 @@ export interface TrustRequest extends RequestBase {
 export type TrustItem =
   | { readonly kind: 'mcp-server'; readonly name: string; readonly transport: 'stdio' | 'http'; readonly commandOrUrl: RedactedText; readonly variables: readonly string[]; readonly file: string }
   | { readonly kind: 'shell-allow'; readonly entry: string }
-  | { readonly kind: 'mode'; readonly value: SelectableMode }
+  | { readonly kind: 'mcp-tools-allow'; readonly entry: string }
+  | { readonly kind: 'mode'; readonly value: ProjectMode }
   | { readonly kind: 'model'; readonly value: string }
-  | { readonly kind: 'provider'; readonly name: string; readonly baseUrl: string }
+  | { readonly kind: 'provider'; readonly name: string; readonly baseUrl: string; readonly sends: string | null }   // key variable or stored key sent there; null when none (deliverable 09, 7.6)
   | { readonly kind: 'profile-pin'; readonly name: string }
-  | { readonly kind: 'profile-defaults'; readonly profile: string; readonly mode: SelectableMode | null; readonly model: string | null };
+  | { readonly kind: 'profile-defaults'; readonly profile: string; readonly mode: ProjectMode | null; readonly model: string | null };
 
 export interface SecretRequest extends RequestBase {
   readonly kind: 'secret';
@@ -565,7 +579,7 @@ export interface ConfirmRequest extends RequestBase {
 }
 export interface ChoiceRequest extends RequestBase {
   readonly kind: 'choice';
-  readonly purpose: 'model' | 'resume' | 'profile' | 'mcp-action';
+  readonly purpose: 'model' | 'mode' | 'effort' | 'resume' | 'profile' | 'mcp-action';   // pickers of deliverable 13, UI-D24
   readonly title: string;
   readonly options: readonly { readonly id: string; readonly label: RedactedText; readonly detail: RedactedText | null }[];
   readonly initialId: string | null;
@@ -631,7 +645,7 @@ export interface Renderer {
 export interface RendererPort {
   send(command: Exclude<UserCommand, { type: 'answer' }>): void;
   answer<K extends InteractionKind>(id: InteractionId, result: InteractionResult<K>): void;  // sent as a UserCommand 'answer'
-  setBackpressure(paused: boolean): void;     // PLAIN only: true above 1 MiB buffered on stdout (deliverable 07, RT-D17)
+  setBackpressure(paused: boolean): void;     // PLAIN only: true above 1 MiB buffered on stdout (deliverable 07, RT-D16)
 }
 
 // src/events/bus.ts — what the core sees
@@ -708,7 +722,7 @@ stateDiagram-v2
 - **No re-entrancy.** `RendererPort.send` and `answer` are delivered to the core on the next microtask (`queueMicrotask`), so a renderer that answers inside `onEvent` never runs core code in the middle of an `emit`.
 - **Renderers never block the core.** `onEvent` returns at once; heavy work (Markdown layout) is scheduled by the renderer. A renderer that throws is an internal error: `BUS` catches it, `LIFE` restores the terminal and writes a crash report (`internal.renderer_failed`).
 - **The core never blocks on a person.** `ask()` returns a promise; while it is pending the event loop keeps running, so Esc (`interrupt`) still arrives and withdraws the request through the abort signal. Approvals are round trips: nothing waits in the SDK (deliverable 01, section 9.3).
-- **Back-pressure.** `INK` and `LINE` never apply it: text deltas are small, and they coalesce them. `PLAIN` writes to stdout through an ordered queue; above 1 MiB buffered it calls `setBackpressure(true)`, and `SC` awaits `drained()` before reading the next stream part, so a slow consumer slows the model stream instead of growing memory (deliverable 07, section 2.4, RT-D17). `PLAIN.stop()` resolves only after the last line is flushed, so `done` is never lost to an early exit (`LIFE` waits for `stop()` before `process.exit`).
+- **Back-pressure.** `INK` and `LINE` never apply it: text deltas are small, and they coalesce them. `PLAIN` writes to stdout through an ordered queue; above 1 MiB buffered it calls `setBackpressure(true)`, and `SC` awaits `drained()` before reading the next stream part, so a slow consumer slows the model stream instead of growing memory (deliverable 07, section 2.4, RT-D16). `PLAIN.stop()` resolves only after the last line is flushed, so `done` is never lost to an early exit (`LIFE` waits for `stop()` before `process.exit`).
 - **Interaction requests are serial per kind.** `APR` shows one approval dialog at a time; several requests of one step are asked one after another (deliverable 03, SD-7a).
 
 ---
@@ -801,7 +815,7 @@ export interface DoneLine extends LineBase {
 | `tool-result` | The call ended, including denied calls | `output` is the redacted, capped text the model received. Every `tool-call` gets exactly one `tool-result` |
 | `usage` | A turn ended | Turn totals in antai's names (deliverable 04, section 5.10) |
 | `error` | An error was shown | Same text as the stderr line; never a provider body or stack trace |
-| `notice` | A warning or information line was shown (pending BRD review, IC-P6) | Extension findings, ignored untrusted settings, MCP failures and drift, unknown model, effort not supported, data-use notice, pruning, storage degradation (section 4.1). `code` is stable; `messageKey` names the text; `ref` names the subject, for example the finding ID `XS-7` or a server name. Same text as the stderr line |
+| `notice` | A warning or information line was shown (beyond the BRD, IC-P6) | Extension findings, ignored untrusted settings, MCP failures and drift, unknown model, effort not supported, data-use notice, pruning, storage degradation (section 4.1). `code` is stable; `messageKey` names the text; `ref` names the subject, for example the finding ID `XS-7` or a server name. Same text as the stderr line |
 | `done` | antai is about to exit | Always the last line; `exitCode` equals the process exit code (section 12); `result` is the final assistant text of the last turn |
 
 Ordering: `seq` strictly increases; a call's `tool-call` precedes its `approval` (if any), which precedes its `tool-result`; a turn's `usage` follows its last `text` and `tool-result`; start-up notices precede the first `tool-call`; an `error` precedes `done`; `done` is last. When `--json` is present in argv, every exit path that runs antai code writes `done`, including usage errors (`sessionId: null`, `exitCode: 2`). Only `SIGKILL`, a crash inside `PLAIN` itself or a closed stdout can prevent it.
@@ -843,14 +857,14 @@ Every string in a line comes from a `RedactedText` or `RedactedObject` field of 
 | New line type | Minor | Consumers must skip unknown `type` values |
 | New value of an open enum (`by`, `outcome`, `category`, `code`, `status`, `tier`, `source`, `level`) | Minor | Consumers must treat unknown values as "other" |
 | New error or notice code | Minor or patch | Codes are an open enum |
-| Removing or renaming a field or type; changing a field's type or meaning; removing an enum value; weakening an ordering rule in 5.3 | Major only (`2.0`), and only in a major package release | Old major kept behind a flag for one major release (Q11-6) |
+| Removing or renaming a field or type; changing a field's type or meaning; removing an enum value; weakening an ordering rule in 5.3 | Major only (`2.0`), and only in a major package release | Old major kept behind a flag for one major release |
 | Text of `message`, `hint`, `reason`, `output`; `messageKey` variants | Any release | Not part of the contract; match on `code`, `rule`, `status` |
 
 The schema version is independent of the package version (section 14). Before package 1.0.0 (phases P1 to P5) the promise does not apply, although `schemaVersion` stays `"1.0"`. The JSON Schema `events.v1.schema.json` is generated from the Zod definitions (CP6) and published with the package (section 10.5); AC-20's test validates every line against it.
 
 ### 5.7 Relation to internal `AgentEvent`s
 
-The public stream is a projection of the internal union, not a second model, so the two cannot drift (BRD review note on NFR-MNT-01). `PLAIN`'s mapper is one exhaustive `switch`: a new `AgentEvent` variant does not compile until someone decides what it maps to.
+The public stream is a projection of the internal union, not a second model, so the two cannot drift. `PLAIN`'s mapper is one exhaustive `switch`: a new `AgentEvent` variant does not compile until someone decides what it maps to.
 
 | `AgentEvent` | NDJSON | stderr (text mode and `--json`) |
 |---|---|---|
@@ -863,7 +877,7 @@ The public stream is a projection of the internal union, not a second model, so 
 | `usage` (`scope: 'turn'`) | `usage` | — |
 | `usage` (`scope: 'step'`), `status`, `turn-start`, `tool-progress`, `command-result`, `session-started`, `mcp-status`, `mcp-drift` | — (failures and drift arrive as `notice` events, section 4.1) | — |
 | `notice` | `notice` | One line, plus the next step |
-| `retry-scheduled` | — (Q11-5) | One line per scheduled retry |
+| `retry-scheduled` | — (not in NDJSON 1.0) | One line per scheduled retry |
 | `error` | `error` | One line, plus the next step |
 | `turn-end` | — (feeds `done`) | Text mode: "stopped after N steps" |
 | `session-ended` | `done` | — |
@@ -930,7 +944,7 @@ The tier hint each safety kind gives `POL` (deliverable 02 owns the full rules):
 | `file`, `access: 'write'` | Normal; Dangerous for a protected path (FR-TOOL-11) | Workspace only, secret list, protected list | `write_file`, `edit_file` |
 | `shell` | From `CLS` | Inside `CLS` | `shell` |
 | `internal` | Safe | — | `load_skill` |
-| `mcp` | Normal; Dangerous with `destructiveHint`; Safe with a trusted `readOnlyHint` or `mcp.tools.allow` | Secret-path scan of string arguments (FR-MCP-07) | Every `mcp__*` tool |
+| `mcp` | Normal; Dangerous with `destructiveHint`; Safe with a trusted `readOnlyHint` or `mcp.tools.allow`, only while the tool is unchanged since accepted (FR-MCP-06) | Secret-path scan of string arguments (FR-MCP-07) | Every `mcp__*` tool |
 
 Services (file access, path guard, shell runner, search, skills) are injected when `BOOT` constructs each tool (`createReadFileTool({ fs, pathGuard, search })`), not passed per call. The per-call context carries only what changes per call:
 
@@ -967,9 +981,10 @@ export interface RawToolOutput {              // never leaves TREG's wrapper (de
   readonly signal?: string | null;            // shell
   readonly timedOut?: boolean;                // FR-SH-07
   readonly interrupted?: boolean;             // Esc during execution
+  readonly summary?: string | null;           // short note for the tool card, e.g. "4 matches" (deliverable 13, UI-11)
 }
 
-export interface ToolResult {                 // after TREG: redacted, then capped (A-S6)
+export interface ToolResult {                 // after TREG: redacted, then capped
   readonly status: 'ok' | 'error' | 'timed-out' | 'interrupted';
   readonly output: RedactedText;              // exactly what the model receives
   readonly truncated: boolean;
@@ -978,6 +993,7 @@ export interface ToolResult {                 // after TREG: redacted, then capp
   readonly exitCode: number | null;
   readonly durationMs: number;
   readonly errorCode: ErrorCode | null;
+  readonly resultSummary: RedactedText | null;  // from RawToolOutput.summary, redacted
 }
 export interface ToolResultSink { put(toolCallId: ToolCallId, result: ToolResult): void }   // per turn, read by EVM
 ```
@@ -991,7 +1007,7 @@ The SDK validates the input against the tool's schema and calls `toolApproval` b
 1. Waits for `RED.whenReady()` (the `.env` scan, HLD-D21) and takes the side-effect lock or a read-pool slot.
 2. Emits the first `tool-progress` through the context, then calls `execute` with the turn signal combined with `timeoutMs`.
 3. Runs the output through `RED.createOutputFilter(cap)` unless it is already a `FilteredOutput`, builds the `ToolResult` and puts it into the `ToolResultSink`.
-4. Returns `output` as the SDK tool's result text. For a failure it throws a `ToolFailure` whose `message` is the redacted, model-facing text from deliverable 08; the SDK reports it as a `tool-error` part (one of the 26 part types verified in deliverable 06, section 6.4), which the model reads as a tool error (FR-AGT-07). The exact model-facing shape of that error is Q11-2.
+4. Returns `output` as the SDK tool's result text. For a failure it throws a `ToolFailure` whose `message` is the redacted, model-facing text from deliverable 08; the SDK reports it as a `tool-error` part (one of the 26 part types verified in deliverable 06, section 6.4), which the model reads as a tool error (FR-AGT-07). The exact model-facing shape of that error is to be confirmed in the P0 spike.
 
 `TREG` builds the SDK `ToolSet` with `tool()` from `ai` (`description`, `inputSchema`, `execute`); the SDK passes the tool call ID and abort signal in its execute options. `EVM` reads the `ToolResult` from the sink when the SDK's `tool-result` part arrives, so the `tool-result` event carries exit code, truncation and duration that the model-facing text does not.
 
@@ -1004,7 +1020,7 @@ The SDK validates the input against the tool's schema and calls `toolApproval` b
 | `name` | `mcp__<server>__<tool>`, sanitised to letters, digits, `_` and `-`, at most 64 characters with a hash suffix (FR-MCP-05) |
 | `description` | The server's description, untrusted text (deliverable 08 decides how it is framed) |
 | `inputSchema` | `{ kind: 'json-schema' }` from the server's `inputSchema` |
-| `safety` | `{ kind: 'mcp', server, tool, annotations, trustReadOnlyHints }`; annotations ignored for Safe unless `trustReadOnlyHints` and the annotation hash is accepted (Q01-16) |
+| `safety` | `{ kind: 'mcp', server, tool, annotations, trustReadOnlyHints }`; annotations ignored for Safe unless `trustReadOnlyHints`; no MCP tool is Safe, by annotation or `mcp.tools.allow`, while a change to its definition or annotations is unaccepted (FR-MCP-06) |
 | `sideEffect` | Always `true`: MCP calls take the lock even with a trusted `readOnlyHint` (deliverable 07, section 6.2) |
 | `timeoutMs` | The server's `toolTimeoutMs`, default 120,000 (deliverable 10) |
 | `execute` | `MCPM.call(server, tool, args, signal)`. Text content parts are joined; structured content is serialised as JSON; other parts become `[<type> content omitted]`; `isError: true` throws `mcp.call_failed` with the server's text as the model-facing message |
@@ -1015,7 +1031,7 @@ The SDK validates the input against the tool's schema and calls `toolApproval` b
 
 ### 7.1 `POL.decide`
 
-`decide` is pure, synchronous and total: it does no I/O, never throws, and always returns a `PolicyDecision` (fail closed: an unexpected state is `denied`). The live facts it needs are gathered for each call, immediately before it, by `AG`'s `toolApproval` wrapper: resolved paths from `PG.gather`, whether the audit writer works, and the server's MCP policy. Gathering per call rather than per turn keeps them as fresh as deliverable 06's read-only ports (UML-D11), while `decide` stays a table-testable function as deliverable 01 (HLD-D4) and deliverable 02 (section 3.9) require. This answers Q06-7.
+`decide` has no side effects and is total: it never throws and always returns a `PolicyDecision` (fail closed: an unexpected state is `denied`). It is read-only rather than pure (deliverable 01, HLD-D4; deliverable 06, UML-D11): for each call it reads the live facts it needs (`CallFacts`) through read-only ports (`PolicyPorts`) that `BOOT` injects at construction, namely resolved paths from `PG.gather`, whether the audit writer works, and the server's MCP policy. It is asynchronous, because it waits for the bash parser while that still loads, and `AG`'s `toolApproval` wrapper awaits it (deliverable 07, section 4.4, RT-D19). Reading the ports at each call keeps an audit failure or an accepted drift effective at once, and tests inject fake ports, so `decide` stays table-testable as deliverable 02 (section 3.9) requires.
 
 ```ts
 // src/safety/policy/index.ts
@@ -1032,12 +1048,17 @@ export interface PolicySnapshot {             // a narrow view that SC's snapsho
   readonly rules: EffectiveRules;                   // RULES data plus merged config lists (deliverable 06, UML-2.4b)
   readonly roots: AllowedRoots;                     // workspace; skill folders and extraReadPaths read-only
   readonly mcpTools: { readonly allow: readonly string[]; readonly deny: readonly string[] };
-  readonly parser: BashParser;                      // loaded before the agent is built (deliverable 07, section 4.2)
+  readonly parser: BashParser;                      // loaded parser; decide awaits CLS.ready before it reads this for a shell call (deliverable 07, sections 4.2 and 4.4)
 }
-export interface CallFacts {                        // gathered per call by AG's wrapper
-  readonly paths: readonly ResolvedPath[];          // PG.gather: file-tool paths, path-like MCP string arguments
+export interface CallFacts {                        // read per call through POL's read-only ports
+  readonly paths: readonly ResolvedPath[];          // PG.gather: file-tool paths, shell path arguments after parsing, path-like MCP string arguments
   readonly auditWritable: boolean;                  // false: deny calls that need an audit record (04, P7)
-  readonly mcpServer: null | { readonly trustReadOnlyHints: boolean; readonly annotationsAccepted: boolean };  // Q01-16
+  readonly mcpServer: null | { readonly trustReadOnlyHints: boolean; readonly toolUnchanged: boolean };   // definition and annotations equal the accepted baseline (FR-MCP-06)
+}
+export interface PolicyPorts {                      // read-only, injected by BOOT (deliverable 06, UML-2.4a); faked in tests
+  gatherPaths(tool: ToolDescriptor, input: unknown, roots: AllowedRoots): readonly ResolvedPath[];  // PG.gather (7.3)
+  auditWritable(): boolean;                         // AUD health, read at each call
+  mcpServer(server: string, tool: string): CallFacts['mcpServer'];   // the server's MCP policy and the tool's drift state
 }
 
 export interface PolicyDecision {
@@ -1055,10 +1076,12 @@ export interface PolicyDecision {
   readonly paths: readonly PathVerdict[];
 }
 
-export function decide(call: PolicyCall, snapshot: PolicySnapshot, facts: CallFacts): PolicyDecision;
+export interface ApprovalPolicy {                   // POL; BOOT constructs it with PolicyPorts; AG's toolApproval wrapper awaits decide
+  decide(call: PolicyCall, snapshot: PolicySnapshot): Promise<PolicyDecision>;   // reads CallFacts through the ports (deliverable 06, UML-2.4a)
+}
 ```
 
-Status meanings follow deliverable 02, section 3.9 (ARCHITECTURE_1 table 3.1 updated to BRD v0.4) and the step order of deliverable 06, section 5.6: `not-applicable` for Safe calls; `approved` for Normal or Dangerous calls the mode runs without asking (`by: 'mode'`) and session allow-list hits (`by: 'session-allow'`); `denied` for hard floor, secret path, outside the allowed roots, `shell.block`, detaching commands, a failed audit writer and `research` with Normal or Dangerous (`by: 'policy'`), or approval needed without a human (`by: 'no-human'`); `user-approval` otherwise. `approvable` is false for every refusal rule and true for `research` and `no-human` denials of Normal and Dangerous calls; it decides exit code 5 (section 12). `AG`'s wrapper is the only code that converts a `PolicyDecision` into the SDK's `ToolApprovalStatus` (`'not-applicable'`, `{ type: 'approved', reason }`, `{ type: 'denied', reason }`, `'user-approval'`; research B 3), and it stores the full decision in the `DecisionLedger` under `toolCallId` for `APR` and the audit (SD-D6, deliverable 07, section 4.4).
+Status meanings follow deliverable 02, section 3.9 and the step order of deliverable 06, section 5.6: `not-applicable` for Safe calls; `approved` for Normal or Dangerous calls the mode runs without asking (`by: 'mode'`) and session allow-list hits (`by: 'session-allow'`); `denied` for hard floor, secret path, outside the allowed roots, `shell.block`, detaching commands, a failed audit writer and `research` with Normal or Dangerous (`by: 'policy'`), or approval needed without a human (`by: 'no-human'`); `user-approval` otherwise. `approvable` is false for every refusal rule and true for `research` and `no-human` denials of Normal and Dangerous calls; it decides exit code 5 (section 12). `AG`'s wrapper is the only code that converts a `PolicyDecision` into the SDK's `ToolApprovalStatus` (`'not-applicable'`, `{ type: 'approved', reason }`, `{ type: 'denied', reason }`, `'user-approval'`), and it stores the full decision in the `DecisionLedger` under `toolCallId` for `APR` and the audit (SD-D6, deliverable 07, section 4.4).
 
 The SDK validates the input against the tool's schema before it calls `toolApproval` (deliverable 07, section 6.1). If `decide` still cannot read the input it needs (for example no `command` string), the call is `denied` with reason "invalid input": `POL` never lets the SDK run a call it could not inspect.
 
@@ -1066,10 +1089,11 @@ The SDK validates the input against the tool's schema before it calls `toolAppro
 
 ```ts
 // src/safety/classifier/index.ts
-export function classify(command: string, ctx: ClassifyContext): ClassifierResult;   // pure, sync
+export function classify(command: string, ctx: ClassifyContext): ClassifierResult;   // no side effects, sync; path arguments resolved through ctx.resolvePath
 export interface ClassifyContext {
   readonly rules: EffectiveRules; readonly parser: BashParser;
   readonly workspaceRoot: string; readonly home: string; readonly os: 'darwin' | 'linux' | 'win32';
+  readonly resolvePath: (word: string, access: 'read' | 'write') => ResolvedPath;   // PG (7.3) for one path argument: realpath, or the deepest existing parent for a new path
 }
 export interface ClassifierResult {
   readonly tier: Tier;                        // maximum over segments and lifts
@@ -1094,7 +1118,7 @@ export interface SegmentClass {
 }
 ```
 
-Command arguments are checked lexically (normalized, `~` and `$HOME` expanded, no `realpath`), because the classifier works on text; file tools get the `realpath` check in 7.3.
+Command path arguments are normalised by the classifier (`~` and `$HOME` expanded), then resolved through `PG` (`ctx.resolvePath`) with `realpath` (the deepest existing parent for a new path) before the secret, protected and workspace checks, as for file tools in 7.3 (BRD 5.5; deliverable 02, 4.1 step ⑥). Arguments that are not literal paths stay text and lift the segment as deliverable 02, 4.1 step ⑦ says.
 
 ### 7.3 Path guard
 
@@ -1102,7 +1126,7 @@ Command arguments are checked lexically (normalized, `~` and `$HOME` expanded, n
 // src/safety/path-guard/index.ts
 export function gather(tool: ToolDescriptor, input: unknown, roots: AllowedRoots): readonly ResolvedPath[];  // sync I/O: realpath
 export function checkPath(path: ResolvedPath, roots: AllowedRoots, rules: EffectiveRules): PathVerdict;  // pure
-export function recheck(raw: string, access: 'read' | 'write', roots: AllowedRoots, rules: EffectiveRules): Promise<PathVerdict>; // at execution (A-S10)
+export function recheck(raw: string, access: 'read' | 'write', roots: AllowedRoots, rules: EffectiveRules): Promise<PathVerdict>; // at execution: catches a path changed since approval
 
 export interface ResolvedPath {
   readonly raw: string;                       // as the model wrote it, "C:\…" or "/c/…" (FR-SH-13)
@@ -1124,7 +1148,7 @@ export interface PathVerdict {
 }
 ```
 
-`gather` uses synchronous `fs.realpathSync` and `fs.lstatSync`, because deliverable 07 keeps the `toolApproval` wrapper synchronous so that it does not depend on whether the SDK accepts a promise there (section 4.4). It runs only for the paths one call names, so its cost is a few system calls.
+`gather` uses synchronous `fs.realpathSync` and `fs.lstatSync`, so the same code works whether or not the SDK accepts a promise from `toolApproval` (deliverable 07, section 4.4 builds an async wrapper; the P0 spike confirms the SDK side). It runs only for the paths one call names, so its cost is a few system calls.
 
 ### 7.4 Redactor
 
@@ -1135,14 +1159,14 @@ export interface Redactor {
   redactObject(value: JsonObject): RedactedObject;            // string leaves only (DS-D9)
   redactModelMessage(message: ModelMessage): ModelMessage;    // skips signatures and provider metadata (DS-D9)
   createStreamRedactor(): StreamRedactor;                     // EVM: streamed model text
-  createOutputFilter(cap: OutputCap): OutputFilter;           // tool output: redact, then cap (A-S6)
+  createOutputFilter(cap: OutputCap): OutputFilter;           // tool output: redact, then cap
   register(value: Secret, label: string, strength: 'secret' | 'env'): void;  // masked from 4 or 8 characters (FR-SEC-04)
   whenReady(): Promise<void>;                                 // resolves when the .env scan is done (HLD-D21)
   readonly generation: number;                                // increases on every register or re-scan
 }
 export interface StreamRedactor {
-  push(chunk: string): RedactedText;          // the releasable prefix; holds back at most until whitespace
-  flush(): RedactedText;                      // or the longest known value is ruled out (Q01-8)
+  push(chunk: string): RedactedText;          // the releasable prefix; holds back the trailing word (at most 8 KB) or an open PEM block (at most 16 KB), deliverable 02, 6.4
+  flush(): RedactedText;                      // releases everything held: end of step, before a tool card, on abort
 }
 export interface OutputFilter {
   write(chunk: string): void;                 // redaction with a carry-over buffer
@@ -1174,7 +1198,7 @@ export function parseModelRef(text: string): Result<ModelRef, ModelError>;    //
 export function resolveModel(nameOrRef: string, config: ResolvedConfig): Result<ModelRef, ModelError>;  // deliverable 09, MP-2
 ```
 
-`models` follows deliverable 09, section 4.5 (answering Q04-11): a key without a colon is an alias whose value is a `provider:model` string; a key with a colon is per-model metadata whose value is an object (`contextWindow`, `maxOutputTokens`, `toolCalling`, `reasoning`). A key whose value has the wrong type is a `config.invalid_value` for that key; an alias that points to another alias is invalid, so resolution cannot loop.
+`models` follows deliverable 09, section 4.5: a key without a colon is an alias whose value is a `provider:model` string; a key with a colon is per-model metadata whose value is an object (`contextWindow`, `maxOutputTokens`, `toolCalling`, `reasoning`). A key whose value has the wrong type is a `config.invalid_value` for that key; an alias that points to another alias is invalid, so resolution cannot loop.
 
 ### 8.2 Catalogue entry
 
@@ -1228,7 +1252,7 @@ export interface TurnModel {
 }
 ```
 
-`LanguageModel` is the SDK type; it never leaves `src/providers/` and `src/agent/`. Keys go from `CRED` to the provider factory as an argument, never through `process.env` (A-S5).
+`LanguageModel` is the SDK type; it never leaves `src/providers/` and `src/agent/`. Keys go from `CRED` to the provider factory as an argument, never through `process.env` or a child environment.
 
 ### 8.4 Retry middleware (`RTY`)
 
@@ -1236,7 +1260,7 @@ export interface TurnModel {
 // src/providers/retry/index.ts
 export function createRetryMiddleware(policy: RetryPolicy, deps: RetryDeps): RetryMiddleware;
 // RetryMiddleware = the middleware type accepted by wrapLanguageModel({ model, middleware }) in ai@7.0.137 (name checked in P0)
-export interface RetryPolicy {                // numbers owned by deliverables 07 (RT-D11) and 09 (section 9.1)
+export interface RetryPolicy {                // numbers owned by deliverables 07 (section 9.2) and 09 (section 9.1)
   readonly maxAttempts: number;               // 5
   readonly maxTimeoutAttempts: number;        // 3
   readonly baseDelayMs: number; readonly maxDelayMs: number; readonly jitter: number;   // 2,000; 10,000; 0.2
@@ -1248,21 +1272,21 @@ export interface RetryDeps {
   readonly catalog: CatalogLookup;            // token estimate and free-plan limits (CR-01)
   onRetry(info: { readonly provider: ProviderId; readonly model: ModelRefText; readonly attempt: number;
                   readonly maxAttempts: number; readonly at: EpochMs; readonly reason: RetryReason;
-                  readonly code: ErrorCode }): void;                  // deliverable 09, section 9.4
+                  readonly code: ErrorCode; readonly limit: 'requests-per-minute' | 'tokens-per-minute' | null }): void;   // deliverable 09, section 9.4
   onRateLimit(snapshot: RateLimitSnapshot): void;
 }
 ```
 
 | Rule | Detail |
 |---|---|
-| Scope | Wraps the model call only (`doStream`, `doGenerate`); a tool never runs twice (FR-ERR-02). The agent sets `maxRetries: 0` (A-C7) |
+| Scope | Wraps the model call only (`doStream`, `doGenerate`); a tool never runs twice (FR-ERR-02). The agent sets the SDK's `maxRetries: 0`, so only `RTY` retries |
 | Retry window | A call is retried only before its first content part; after it an error is final as `provider.stream_interrupted` (deliverable 09, MP-6) |
 | Classification | Deliverable 09, MP-7: network, timeout, per-minute 429, 5xx and overload are retried; everything else is final with one of the `provider.*` codes in section 11.2 |
 | Pre-flight | Estimated input plus `maxOutputTokens` against the remaining per-minute tokens: wait (`reason: 'token-budget'`) or throw `provider.request_too_large` (deliverable 09, MP-5) |
 | Abort | A pending wait ends at once when the turn's signal aborts |
 | Final failure | Throws a `ProviderError` (section 11) with `code`, `retryAt` and `provider`; the provider's body is kept only as `cause` for the debug log |
 
-`RTY` cannot import `src/events/`; `AG` passes `onRetry` when the model is built and `SC` turns it into a `retry-scheduled` event; `onRateLimit` feeds `USG`.
+`RTY` cannot import `src/events/`; `AG` passes `onRetry` when the model is built and forwards each call to `BUS` as a `retry-scheduled` event, which `SC` also stores as a `retry` record (deliverable 07, section 9.2); `onRateLimit` feeds `USG`.
 
 ### 8.5 Session-to-agent contracts
 
@@ -1283,7 +1307,7 @@ export interface TurnSnapshot extends PolicySnapshot {
 // src/agent/ledger.ts — one per turn, held in SC's TurnState (deliverable 07, section 4.4)
 export interface DecisionLedger {
   set(toolCallId: ToolCallId, decision: PolicyDecision): void;
-  get(toolCallId: ToolCallId): PolicyDecision | undefined;   // same answer if the SDK asks again (Q03-3, RT-D20)
+  get(toolCallId: ToolCallId): PolicyDecision | undefined;   // same answer if the SDK asks again (RT-D19)
 }
 
 // what AG hands SC when the stream ends with approval requests
@@ -1294,7 +1318,7 @@ export interface PendingApproval {
   readonly input: RedactedObject;
   readonly decision: PolicyDecision;          // from the ledger; APR asks one request per entry of decision.dialogs
 }                                             // APR gets the preview through ToolPreviewer (section 6.1)
-// what APR returns; SC turns it into { type: 'tool-approval-response', approvalId, approved, reason } (research B 3)
+// what APR returns; SC turns it into { type: 'tool-approval-response', approvalId, approved, reason }
 export interface ApprovalOutcome {
   readonly approvalId: ApprovalId;
   readonly approved: boolean;                 // true only if every dialog said Yes
@@ -1312,14 +1336,14 @@ The snapshot is deep-frozen in development and test builds, so a component that 
 | SDK part (`result.stream`) | `AgentEvent` |
 |---|---|
 | `text-start`, `text-delta`, `text-end` | `text-delta` after the hold-back; `text-end` with the whole block |
-| `reasoning-start`, `reasoning-delta`, `reasoning-end` (A-C3) | `reasoning-delta`, `reasoning-end` |
+| `reasoning-start`, `reasoning-delta`, `reasoning-end` | `reasoning-delta`, `reasoning-end` |
 | `start-step` warnings (`unsupported`, `compatibility`) | `notice` (`provider.effort_unsupported`, once per model and level) |
 | `tool-call` | `tool-call-started` (once per `toolCallId`) |
 | `tool-approval-request` without `isAutomatic` | none; handed to `SC` as `PendingApproval` |
 | `tool-approval-response` with `isAutomatic: true` | `approval` (via `SC`, which audits it, SD-D6) |
 | `tool-result` | `tool-result` from the sink's `ToolResult` |
 | `tool-error` | `tool-result` with `status: 'error'` |
-| `tool-output-denied` (A-C8) | `tool-denied` with the reason from the ledger or the user's answer |
+| `tool-output-denied` | `tool-denied` with the reason from the ledger or the user's answer |
 | `finish-step` | `usage` (`scope: 'step'`) |
 | `error`, `abort` | `SC` maps to `error` or `turn-end` with `reason: 'interrupted'` |
 | `finish` | `SC` emits `usage` (`scope: 'turn'`) and `turn-end` |
@@ -1328,7 +1352,7 @@ This follows deliverable 06, section 6.4, which lists all 26 `TextStreamPart` ty
 
 ### 8.6 Usage mapping
 
-`USG` is the only code that reads the SDK usage object (research F 5.4):
+`USG` is the only code that reads the SDK usage object:
 
 | antai `Usage` | AI SDK `LanguageModelUsage` |
 |---|---|
@@ -1346,9 +1370,9 @@ This follows deliverable 06, section 6.4, which lists all 26 `TextStreamPart` ty
 | antai export | Wraps | Used by |
 |---|---|---|
 | `approvalSecretOption(secret)` | `experimental_toolApprovalSecret` | `AG` |
-| `fingerprintTools`, `detectToolDrift` | Same names from `ai` (A-C11) | `MCPM` |
+| `fingerprintTools`, `detectToolDrift` | Same names from `ai` | `MCPM` |
 | `registerDebugTelemetry(sink)` | `registerTelemetry` | `DBG` |
-| `createStdioTransport(spec)` | antai's own transport, or `Experimental_StdioMCPTransport` (Q01-2) | `MCPM` |
+| `createStdioTransport(spec)` | antai's own transport through `PSV`; `Experimental_StdioMCPTransport` only if the P0 spike rules that out | `MCPM` |
 
 ---
 
@@ -1386,7 +1410,7 @@ export interface SessionWriter {
 export type SessionRecord = SessionHeaderRecord | MessageRecord | EventRecord | UsageRecord | TitleRecord;
 ```
 
-`SessionRecord` is a union discriminated on `type` (`session`, `message`, `event`, `usage`, `title`), and `EventRecord` on `kind`, with exactly the fields of deliverable 04, sections 5.7 to 5.10. The Zod schemas in `src/infra/history/schema.ts` are the single source for both the TypeScript types and `session-record.schema.json` (DLV-SW-09). `MessageRecord.message` is the SDK's `ModelMessage` as typed by `ai@7.0.137` (`import type { ModelMessage } from 'ai'`), stored as produced and validated only structurally (role and content array). Verified parts: `ToolContent = Array<ToolResultPart | ToolApprovalResponse>` and the `execution-denied` output (research B 3, A-C8). Whether `tool-approval-request` parts appear in `result.responseMessages`, as deliverable 04's example shows, is confirmed by the P0 approval spike.
+`SessionRecord` is a union discriminated on `type` (`session`, `message`, `event`, `usage`, `title`), and `EventRecord` on `kind`, with exactly the fields of deliverable 04, sections 5.7 to 5.10. The Zod schemas in `src/infra/history/schema.ts` are the single source for both the TypeScript types and `session-record.schema.json` (DLV-SW-09). `MessageRecord.message` is the SDK's `ModelMessage` as typed by `ai@7.0.137` (`import type { ModelMessage } from 'ai'`), stored as produced and validated only structurally (role and content array). Verified parts: `ToolContent = Array<ToolResultPart | ToolApprovalResponse>` and the `execution-denied` output. Whether `tool-approval-request` parts appear in `result.responseMessages`, as deliverable 04's example shows, is confirmed by the P0 approval spike.
 
 ### 9.2 Audit writer (`AUD`)
 
@@ -1461,7 +1485,7 @@ export interface SafeFs {
   readJsonl(path: string): AsyncIterable<JsonlLine>;
   lock(path: string, opts: LockOptions): Promise<LockHandle>;                       // short locks: 50 ms retry, 2 s wait
   lockSession(path: string): Promise<LockHandle | { readonly heldBy: LockInfo }>;   // no wait
-  writeWorkspaceFile(path: string, data: string): Promise<void>;                    // O_NOFOLLOW where available (A-S10)
+  writeWorkspaceFile(path: string, data: string): Promise<void>;                    // O_NOFOLLOW where available
   moveAside(path: string, suffix: 'corrupt' | 'quarantine'): Promise<string>;
 }
 export type ReadJson<T> =
@@ -1489,7 +1513,7 @@ export interface LockInfo { readonly pid: number; readonly hostname: string; rea
 | Rule | Example | Why |
 |---|---|---|
 | Keys are camelCase; acronyms follow the AI SDK option a key maps to (`baseURL`), otherwise only the first letter is capital (`clientId`) | `trustReadOnlyHints`, `apiKeyEnv` | BRD names; one style per file |
-| Units in the name for every quantity | `timeoutMs`, `retentionDays`, `pruneAt` (a ratio, documented as 0–1) | No unit guessing |
+| Units in the name for every quantity | `timeoutMs`, `retentionDays`, `pruneAt` (a ratio, more than 0 and at most 1) | No unit guessing |
 | Booleans are positive | `history.enabled`, not `history.disabled` | No double negatives |
 | Enums are lowercase string literals, hyphenated | `"provider-default"`, `"openai-compatible"` | Same style as tiers and modes |
 | Every optional key has an explicit default in the schema | `maxSteps` default 25 | Defaults appear in the generated JSON Schema and docs (DOC-03) |
@@ -1511,8 +1535,8 @@ flowchart LR
     GLB["global ~/.antai/config.json"]
     PRJ["project .antai/config.json"]
     FIL["project filter<br/>trust-gated keys only if trusted<br/>global-only keys dropped<br/>mode auto never"]
-    PRF["profile defaults<br/>mode and model of a project<br/>profile only if trusted"]
-    ENV["ANTAI_* variables"]
+    PRF["profile defaults<br/>mode and model of a project<br/>profile only if trusted<br/>mode auto never"]
+    ENV["ANTAI_* variables<br/>listed keys only<br/>mode auto never"]
     FLG["flags"]
     MRG{{"merge by key strategy<br/>replace · merge · union · all-true"}}
     OUT["ResolvedConfig<br/>value and source per key"]
@@ -1533,18 +1557,18 @@ flowchart LR
 
 | Strategy | Rule | Keys (deliverable 12 has the full table) |
 |---|---|---|
-| `replace` | The highest layer that sets the key wins | Scalars: `model`, `mode`, `effort`, `maxSteps`, `context.pruneAt`, `shell.timeoutMs`, `shell.gitBashPath` |
+| `replace` | The highest layer that sets the key wins | Scalars: `model`, `mode`, `effort`, `maxSteps`, `context.pruneAt`, `context.maxInstructionBytes`, `shell.timeoutMs`, `shell.gitBashPath`, `retry.maxAttempts`, `retry.maxWaitMs`, `privacy.dataUseNotice`, `ui.*` |
 | `merge` | Objects merge key by key, then each key's own strategy applies | `models`, `providers`, `shell.timeouts` |
-| `union` | Lists combine across layers, lower layers first, duplicates removed; never shortened by a higher layer | `tools.disabled`, `shell.allow`, `shell.dangerous`, `shell.block`, `mcp.tools.allow`, `mcp.tools.deny`, `secrets.paths`, `secrets.patterns`, `workspace.extraReadPaths` |
+| `union` | Lists combine across layers, lower layers first, duplicates removed; never shortened by a higher layer | `tools.disabled`, `shell.allow`, `shell.dangerous`, `shell.block`, `mcp.tools.allow`, `mcp.tools.deny`, `secrets.paths`, `secrets.patterns`, `workspace.extraReadPaths`, `mcp.disabledServers` |
 | `all-true` | `false` in any layer wins | `history.enabled` |
 
-| Project-layer rule | Meaning | Keys |
+| Project-layer rule | Meaning | Keys (deliverable 12 has the full table) |
 |---|---|---|
-| `any` | Applies trusted or not | `effort`, `maxSteps`, `context.pruneAt`, `shell.timeoutMs`, `shell.timeouts`, `tools.disabled`, `mcp.tools.deny`, `history.enabled` |
+| `any` | Applies trusted or not | `effort`, `maxSteps`, `context.pruneAt`, `context.maxInstructionBytes`, `retry.maxAttempts`, `retry.maxWaitMs`, `shell.timeoutMs`, `shell.timeouts`, `tools.disabled`, `mcp.tools.deny`, `history.enabled` |
 | `tighten-only` | Applies even untrusted, because it only adds restrictions | `shell.dangerous`, `shell.block`, `secrets.paths`, `secrets.patterns` (FR-CFG-04, FR-SEC-01, 03) |
-| `trusted-only` | Ignored with a notice unless trusted | `model`, `models` aliases, `providers`, any `baseURL`, `profile`, `shell.allow`, `mcp.tools.allow` (04, P6) |
+| `trusted-only` | Ignored with a notice unless trusted | `model`, `models` aliases, `providers.<name>.type`, `.apiKeyEnv` and any `baseURL`, `profile`, `shell.allow`, `mcp.tools.allow` (FR-CFG-04, FR-MCP-06) |
 | `research-or-manual` | `trusted-only`, and only `research` or `manual` | `mode` (FR-CFG-05) |
-| `global-only` | Never read from a project | `history.retentionDays`, `audit.retentionDays` (04, P3), `shell.gitBashPath`, `workspace.extraReadPaths` (04, P6) |
+| `global-only` | Never read from a project | `history.retentionDays`, `audit.retentionDays`, `shell.gitBashPath`, `workspace.extraReadPaths` (FR-CFG-01); `mcp.disabledServers` (deliverable 10, 6.3), `privacy.dataUseNotice` (deliverable 09, 14), `ui.*` (deliverable 13) |
 
 `maxSteps` is clamped to the ceiling of 100 whatever the layer (FR-AGT-02). These rules live in a typed table beside the Zod schema, so the merge code, `antai config` (FR-CFG-03) and the docs read one source:
 
@@ -1574,9 +1598,9 @@ const CommandPattern = z.string().trim().min(1).max(500)
   .describe('Command prefix matched word by word, for example "npm test".');
 
 export const ShellConfig = z.object({
-  timeoutMs: z.number().int().positive().default(120_000)
+  timeoutMs: z.number().int().min(1_000).max(3_600_000).default(120_000)
     .describe('Timeout for one command, in milliseconds. Dev-server commands default to 30,000 (FR-SH-07).'),
-  timeouts: z.record(CommandPattern, z.number().int().positive()).default({})
+  timeouts: z.record(CommandPattern, z.number().int().min(1_000).max(3_600_000)).default({})
     .describe('Timeout per command pattern, in milliseconds. Overrides timeoutMs for matching commands.'),
   allow: z.array(CommandPattern).default([])
     .describe('Commands treated as Safe. Never covers secret or protected paths. Project value needs trust.'),
@@ -1618,9 +1642,9 @@ export interface ConfigIssue {
 
 ### 10.5 JSON Schema generation and publication (DLV-SW-09)
 
-- `npm run schemas` generates `config.schema.json`, `mcp.schema.json`, `profile-frontmatter.schema.json`, `skill-frontmatter.schema.json`, `session-record.schema.json` and `events.v1.schema.json` from the Zod definitions, with `ConfigKeyMeta` added as `x-antai-merge` and `x-antai-project` keywords for the reference docs. The generator is Zod 4's JSON Schema export (Q01-12; fallback hand-written schemas).
-- The generated files are committed under `schemas/` and CI fails if regenerating changes them, so a schema change is visible in review.
-- They ship in the package under `dist/schemas/` (exposed through the `exports` map, deliverable 16) and are the source of the configuration reference (DLV-DOC-03). A public `$schema` URL depends on Q1 (Q11-7).
+- `npm run schemas` generates `config.schema.json`, `mcp.schema.json`, `profile-frontmatter.schema.json`, `skill-frontmatter.schema.json`, `session-record.schema.json`, `audit-record.schema.json` (deliverable 04, section 3.2), `events.v1.schema.json` and the schemas of the `antai config` and `antai mcp list` JSON documents (deliverable 12, section 9.4) from the Zod definitions, with `ConfigKeyMeta` added as `x-antai-merge` and `x-antai-project` keywords for the reference docs. The generator is Zod 4's JSON Schema export (hand-written schemas are the fallback if it falls short in P1).
+- The generated files are not committed: the build writes them to `dist/schemas/` (deliverable 16, section 2.2), so a schema change is reviewed in the Zod definitions, the one source.
+- They ship in the package under `dist/schemas/` (deliverable 16, sections 3.5 and 3.9: not in the `exports` map, which lists only `./package.json`, so tools reach them by file path) and are the source of the configuration reference (DLV-DOC-03). A config file's `$schema` points at the copy in the installed package; v1 publishes no separate schema URL.
 
 ---
 
@@ -1692,11 +1716,17 @@ Codes are `<category>.<snake_case>`, the format deliverable 09 (section 10.1) pr
 | `usage.profile_not_found` | usage | `--profile` names an unknown or invalid profile (deliverable 10, XP-16) | 2 |
 | `usage.session_not_found` | usage | `--resume <id>` names no session | 2 |
 | `usage.session_other_project` | usage | Session of another project; antai prints its path (FR-HIS-04) | 2 |
+| `usage.prompt_missing` | usage | `antai run` without a prompt, also with piped stdin (deliverable 12, REF-P5) | 2 |
+| `usage.flag_conflict` | usage | A single-value flag given twice, or conflicting flags (deliverable 12, REF-D6) | 2 |
+| `usage.unknown_command` | usage | A built-in or unknown slash command as the `run` prompt (deliverable 12, section 3.2) | 2 |
+| `usage.session_ambiguous` | usage | A `--resume` prefix matches several sessions | 2 |
+| `usage.server_exists` | usage | `antai mcp add` names a server already in the target file | 2 |
+| `usage.home_workspace` | usage | Home folder or drive root as workspace: `run` in `auto` or skip (deliverable 02, SEC-D9), or `antai init` without a terminal | 2 |
 | `config.parse_failed` | config | A config or MCP file is not valid JSONC; defaults apply | — |
 | `config.invalid_value` | config | Value invalid; default or fail-closed value used (FR-CFG-02) | — |
 | `config.unknown_key` | config | Unknown key (warning) | — |
 | `config.ignored_untrusted` | config | Trust-gated project key ignored (FR-CFG-04) | — |
-| `config.project_auto_ignored` | config | A project file set `auto` (FR-CFG-05) | — |
+| `config.project_auto_ignored` | config | A project file or a profile set `auto` (FR-CFG-05) | — |
 | `config.git_bash_invalid` | config | Override path invalid; auto-detection used (FR-SH-11) | — |
 | `config.git_bash_missing` | config | Git Bash not found; shell tool off (FR-SH-11, AC-23) | — |
 | `model.invalid_reference` | model | Reference cannot be parsed, or an alias does not resolve (deliverable 09) | 2 |
@@ -1722,14 +1752,20 @@ Codes are `<category>.<snake_case>`, the format deliverable 09 (section 10.1) pr
 | `provider.content_filtered` | provider | Finish reason content filter or a safety block | 3 |
 | `provider.unknown` | provider | Any other provider failure | 3 |
 | `context.window_full` | context | antai's own stop: still over the window after pruning; suggests `/compact` (SD-D10, deliverable 07, section 9.1) | 3 |
+| `context.fixed_overhead` | context | Instructions and tools alone leave too little room for messages (deliverable 08, 10.7) | 3 |
+| `context.message_too_large` | context | The new user message alone does not fit one request (deliverable 08, 10.7) | 3 |
 | `limit.step_cap` | limit | Turn stopped at the step cap (FR-AGT-02) | 4 |
 | `tool.invalid_input` | tool | Input failed the tool's schema (SDK check) | — |
 | `tool.path_denied` | tool | Path refused at execution (outside the roots, or secret) | — |
-| `tool.path_changed` | tool | Path changed between approval and execution (A-S10) | — |
+| `tool.path_changed` | tool | Path changed between approval and execution | — |
 | `tool.file_not_found` | tool | File or folder missing | — |
 | `tool.binary_file` | tool | `read_file` on a binary file (FR-TOOL-01) | — |
 | `tool.edit_no_match` | tool | `edit_file` span not found (FR-TOOL-03) | — |
 | `tool.edit_ambiguous` | tool | `edit_file` span matches more than once | — |
+| `tool.not_a_file` | tool | A file tool was given a folder | — |
+| `tool.not_a_directory` | tool | `list_directory` or `find_files` was given a file | — |
+| `tool.invalid_pattern` | tool | Glob or regular expression refused (deliverable 12, sections 6.9 and 6.10) | — |
+| `tool.file_changed` | tool | File changed after the user approved the change; nothing written (deliverable 12, REF-D16) | — |
 | `tool.skill_not_found` | tool | `load_skill` names no skill, or the skill can no longer be read (deliverable 10, XS-21) | — |
 | `tool.timeout` | tool | A non-shell tool exceeded its timeout (deliverable 07, section 6.3) | — |
 | `tool.sudo_unsupported` | tool | `sudo` on Windows (SD-D15) | — |
@@ -1739,7 +1775,7 @@ Codes are `<category>.<snake_case>`, the format deliverable 09 (section 10.1) pr
 | `mcp.variable_missing` | mcp | `${VAR}` not set; server failed (FR-MCP-03, XM-9) | — |
 | `mcp.start_failed` | mcp | Command not found, exited, start-up timeout, no common protocol version (XM-17 to XM-20) | — |
 | `mcp.auth_rejected` | mcp | 401 with a configured `Authorization` header (XM-22) | — |
-| `mcp.redirect_refused` | mcp | HTTP redirect refused (A-C13, XM-23) | — |
+| `mcp.redirect_refused` | mcp | HTTP redirect refused (`redirect: 'error'`, XM-23) | — |
 | `mcp.unreachable` | mcp | DNS, TLS or connection error (XM-24) | — |
 | `mcp.disconnected` | mcp | Call to a server that is no longer connected | — |
 | `mcp.call_failed` | mcp | Server returned an error result | — |
@@ -1756,7 +1792,7 @@ Codes are `<category>.<snake_case>`, the format deliverable 09 (section 10.1) pr
 | `oauth.refresh_failed` | oauth | Refresh failed (`invalid_grant`); server needs login | — |
 | `storage.history_stopped` | storage | Session append failed; history off for this session | — |
 | `storage.audit_unavailable` | storage | Audit append failed; side effects denied (04, P7) | — |
-| `storage.credentials_write` | storage | Key or token kept for this session only | — |
+| `storage.credentials_write` | storage | Key or token kept for this session only; a subcommand exits 1 (section 12.3) | — |
 | `storage.trust_write` | storage | Trust answer kept for this session only | — |
 | `storage.lock_timeout` | storage | Short lock not taken within 2 s | — |
 | `storage.no_space` | storage | Disk full or quota exceeded | — |
@@ -1767,8 +1803,8 @@ Codes are `<category>.<snake_case>`, the format deliverable 09 (section 10.1) pr
 | `storage.session_locked` | storage | Session held by another process; resumed as a copy (FR-HIS-11) | — |
 | `storage.session_newer_format` | storage | Session written by a newer antai; not resumable | 2 |
 | `storage.home_unwritable` | storage | `~/.antai` cannot be created or written; history off, only Safe reads run | — |
-| `internal.unexpected` | internal | Uncaught exception or unhandled rejection (FR-ERR-04), or a bug contained in a turn (deliverable 07, RT-D14) | 1 |
-| `internal.approval_signature` | internal | `InvalidToolApprovalSignatureError` from the SDK (A-S8, SD-7b) | 1 |
+| `internal.unexpected` | internal | Uncaught exception or unhandled rejection (FR-ERR-04), or a bug contained in a turn (deliverable 07, RT-D13) | 1 |
+| `internal.approval_signature` | internal | `InvalidToolApprovalSignatureError` from the SDK (per-process approval signing secret, SD-7b) | 1 |
 | `internal.renderer_failed` | internal | A renderer threw | 1 |
 | `interrupted.by_user` | interrupted | Esc, Ctrl+C or SIGINT ended the turn or run | 130 |
 | `interrupted.by_signal` | interrupted | SIGTERM or SIGHUP | 143 or 129 |
@@ -1792,6 +1828,7 @@ Notice codes share the format and the `NoticeCode` union. Errors with "—" abov
 | `context.pruned` | context | Older output left out of the request (SD-15a) |
 | `trust.untrusted` | trust | Untrusted folder in `run`; trust-gated settings ignored |
 | `session.turn_running` | session | Enter refused while a turn runs (HLD-D18) |
+| `session.unknown_command` | session | Unknown slash command at the prompt; the nearest command is suggested (deliverable 13, UI-29) |
 | `session.env_scan_slow` | session | Tool output waits for the `.env` scan (deliverable 07, section 9.5) |
 
 Interactively, only the codes raised before the session starts (usage, missing key) end the process; every other error ends at most the turn (FR-ERR-01, NFR-REL-02).
@@ -1859,21 +1896,21 @@ export function formatError(error: AntaiError, ctx: { readonly surface: 'interac
 
 | Code | Meaning | `antai run` | Interactive `antai` | Source |
 |---|---|---|---|---|
-| 0 | Done | Task finished with no denied action | `/exit`, Ctrl+C twice, home-folder confirmation declined | FR-UI-06, 03 SD-1a |
+| 0 | Done | Task finished with no denied action | `/exit`, Ctrl+C twice, Ctrl+D twice on an empty input, home-folder confirmation declined | FR-UI-06, 03 SD-1a |
 | 1 | Internal error | Crash; redacted crash report written | Same | FR-UI-06, FR-ERR-04 |
-| 2 | Usage or config error | Bad flag or value, missing API key, invalid model, session not found | Bad flag, stdin not a terminal, first-run key prompt cancelled | FR-UI-06, FR-MOD-04 |
+| 2 | Usage or config error | Bad flag or value, missing API key, invalid model, session not found, home-folder workspace in `auto` or skip (deliverable 02, SEC-D9) | Bad flag, stdin not a terminal, first-run key prompt cancelled | FR-UI-06, FR-MOD-04 |
 | 3 | Provider error | Final provider error (key, quota, network, too large) | — (the session continues) | FR-UI-06, FR-ERR-01 |
 | 4 | Step cap reached | Turn stopped at `maxSteps` | — | FR-UI-06, FR-AGT-02 |
-| 5 | Finished with a denied action | At least one tool call was denied (IC-P2) | — | FR-UI-06, D19 |
+| 5 | Finished with a denied action | At least one approvable tool call was denied (IC-P2) | — | FR-UI-06, D19 |
 | 129 | Ended by SIGHUP | Terminal closed | Terminal closed | IC-P1 |
 | 130 | Interrupted | Ctrl+C or SIGINT | — (Ctrl+C twice is a normal exit, code 0) | IC-P1 |
 | 143 | Ended by SIGTERM | SIGTERM | SIGTERM | IC-P1 |
 
-129, 130 and 143 follow the shell convention of 128 plus the signal number, which scripts already test for (pending BRD review, IC-P1). Exit code 5 counts every denial, by policy, by mode or for lack of a human (pending BRD review, IC-P2): in a non-interactive run, any denial means the model asked for an action that did not happen, which a CI job should see.
+129, 130 and 143 follow the shell convention of 128 plus the signal number, which scripts already test for (beyond the BRD, IC-P1). Exit code 5 counts every denial of an approvable call, whether `research` mode or the lack of a human denied it (beyond the BRD, IC-P2): in a non-interactive run, such a denial means the model asked for an action that did not happen, which a CI job should see. Refusals (hard floor, secret path, `shell.block` and the like) are not approvable and do not set 5 by themselves.
 
 ### 12.2 Precedence
 
-When several apply to one run, the first in this order wins (pending BRD review, IC-P3):
+When several apply to one run, the first in this order wins (beyond the BRD, IC-P3):
 
 1. **1 internal error**: nothing else in the run can be trusted.
 2. **130, 143, 129 interrupted**: the run did not end on its own.
@@ -1883,20 +1920,22 @@ When several apply to one run, the first in this order wins (pending BRD review,
 6. **5 denied action**: the task finished, but something it tried was blocked.
 7. **0 done.**
 
-So a run with a denial that then hits the daily quota exits 3, and a run that hits the step cap after a denial exits 4. `SC` computes the outcome from the turn's `turn-ended` reason, the denial count and any final error; `LIFE` exits with it after `PLAIN` has written `done` with the same code.
+So a run with a denial that then hits the daily quota exits 3, and a run that hits the step cap after a denial exits 4. `SC` computes the outcome from the turn's `turn-end` reason, the denial count and any final error; `LIFE` exits with it after `PLAIN` has written `done` with the same code.
 
 ### 12.3 Subcommands
 
 | Subcommand | 0 | 2 | 3 | 130 |
 |---|---|---|---|---|
-| `antai login <provider>`, `logout` | Stored or removed; "no key needed" for Ollama and LM Studio | No terminal (SD-D14), unknown provider | — | Prompt cancelled |
-| `antai mcp list` | Always, also with failed servers (their state is printed) | — | — | — |
-| `antai mcp add`, `remove` | File changed | Bad arguments, unknown server | — | — |
+| `antai login <provider>` | Stored; "no key needed" for Ollama and LM Studio | No terminal (SD-D14), unknown provider | — | Prompt cancelled |
+| `antai logout <provider>` | Removed, or nothing stored; no terminal needed (deliverable 12, REF-D10) | Unknown provider | — | — |
+| `antai mcp list` | Whenever the list is printed, also with failed servers (their state is printed) | Bad arguments | — | — |
+| `antai mcp add`, `remove` | File changed, or the user declined (`add`) | Bad arguments, unknown server, name already in the target file (`usage.server_exists`) | — | — |
 | `antai mcp login <name>` | Logged in | Unknown server, untrusted project server, no client ID, no terminal | Authorization or MCP server failed, timeout (IC-P4) | Esc |
 | `antai mcp logout <name>` | Tokens deleted (or none stored) | Unknown server | — | — |
-| `antai config`, `antai init` | Printed; file created or already present | Bad arguments | — | — |
+| `antai config`, `antai init` | Printed; file created or already present | Bad arguments; `init` in the home folder without a terminal (`usage.home_workspace`) | — | — |
+| `antai doctor`, `antai audit` (beyond the BRD, deliverable 15) | Report produced, also with failed checks; audit query ran, also with no matches | Bad arguments | — | — |
 
-Any subcommand exits 1 on an internal error. Deliverable 12 lists the messages.
+Any subcommand exits 1 on an internal error, or when it cannot write the file it exists to change (`credentials.json`, an MCP file, `AGENT.md`). Deliverable 12 lists the messages.
 
 ---
 
@@ -1937,7 +1976,7 @@ A missing placeholder, an unknown key or a stray parameter is a compile error.
 |---|---|
 | Key naming | Lowercase, dotted, snake_case segments. An error or notice uses its code as key (`provider.quota_daily`) or a variant `<code>.<variant>` for a more specific text (`provider.quota_daily.google`, deliverable 09, section 8.7); other texts use `<area>.<snake_case>` (`trust.prompt_title`) |
 | Two parts | Errors and warnings have `what` and `next`; a test fails on any entry without both (NFR-USE-02) |
-| Name the thing | The provider, file, key, server or command involved, then the cause, then the next step (FR-ERR-01; research E 6.3) |
+| Name the thing | The provider, file, key, server or command involved, then the cause, then the next step (FR-ERR-01) |
 | Plain English | Short sentences; British spelling; no jargon or raw error codes (`ECONNREFUSED` goes to the debug log); no blame, no exclamation marks; commands, paths and keys in the exact form the user types |
 | One line | `what` fits one line of an 80-column terminal where possible; `next` is one more line (BRD 4.12) |
 | Numbers and times | Thousands separators for counts, `2h 14m` for durations, local time for clock times on screen and ISO 8601 in NDJSON, through helpers in `MSG` |
@@ -1954,7 +1993,7 @@ A missing placeholder, an unknown key or a stray parameter is a compile error.
 | Package `@geekyants/antai` | Semantic versioning; prereleases per phase (deliverable 16) | Any change to the public surface below | Changesets record every user-visible change (DLV-DOC-09) |
 | Public surface | CLI flags and subcommands, exit codes (section 12), NDJSON (section 5), config and MCP file keys, `PROFILE.md` and `SKILL.md` fields, `ANTAI_*` variables, readability of files antai wrote | Removing or changing the meaning of any of them | Major release only, after deprecation |
 | `--json` stream | `schemaVersion` `"major.minor"`, independent of the package version | Section 5.6 | A schema major only in a package major |
-| On-disk formats | Session `formatVersion`, record `v`, file `version` (deliverable 04, section 10) | A renamed, removed or redefined field | Readers migrate older versions in memory; files are never rewritten; newer versions are refused with a message |
+| On-disk formats | Session `formatVersion`, record `v`, file `version` (deliverable 04, section 10) | A renamed, removed or redefined field | Readers migrate older versions in memory; session and audit files are never rewritten; a newer version is refused or read for known fields only, per file (deliverable 04, section 10.1) |
 | Config, MCP files, frontmatter | No version field (user-written); the JSON Schema files carry the schema version in their `$id` | A removed or redefined key | Additive growth; deprecated keys keep working with a warning |
 | Rule data (`RULES`) | Version constant in `src/rules/` (DLV-SW-07) | — | Recorded in debug logs; `trusted.json` uses its own `hashVersion` (deliverable 04, section 5.6) |
 | Internal TypeScript contracts | None | — | Not public: the package exposes a command, not a library. Both sides change in one merge request |
@@ -1973,7 +2012,7 @@ TypeScript 6.0.x (deliverable 01, section 7), strict, ESM only:
 {
   "compilerOptions": {
     "target": "ES2023", "lib": ["ES2023"], "types": ["node"],
-    "module": "ESNext", "moduleResolution": "Bundler",     // tsdown bundles; extensionless imports
+    "module": "NodeNext", "moduleResolution": "NodeNext",  // Node's ESM rules; relative imports carry their extension (deliverable 16, section 3.3)
     "verbatimModuleSyntax": true, "isolatedModules": true,  // `import type` is explicit
     "strict": true,                                         // includes useUnknownInCatchVariables
     "noUncheckedIndexedAccess": true, "exactOptionalPropertyTypes": true,
@@ -2041,9 +2080,9 @@ The folder and package rules of deliverable 01, section 8.2 apply unchanged. Thi
 | Type imports | `@typescript-eslint/consistent-type-imports` |
 | Default exports, `enum`, `console`, `process.exit`, `process.env`, branded-type assertions | `no-restricted-syntax` and `no-restricted-properties` selectors, with per-folder overrides from 15.4 |
 | Paths joined by strings | The custom rule of deliverable 01, section 8.3 (NFR-COMP-03) |
-| Formatting | Formatter chosen in P1 (Prettier assumed, Q11-9); checked in CI (NFR-MNT-04) |
+| Formatting | Prettier, version pinned in P1 (deliverable 16); checked in CI (NFR-MNT-04) |
 
-Package versions of ESLint, `typescript-eslint` and dependency-cruiser are unverified (deliverable 01, section 7) and fixed in P1.
+Package versions of ESLint, `typescript-eslint` and dependency-cruiser are to be confirmed and pinned in P1 (deliverable 01, section 7).
 
 ### 15.6 Error handling
 
@@ -2059,7 +2098,7 @@ Package versions of ESLint, `typescript-eslint` and dependency-cruiser are unver
 - Every long-running operation takes an `AbortSignal` and stops promptly when it aborts (FR-AGT-04).
 - Background work (MCP connects, `.env` scan, retention, title call) starts through one helper, `runInBackground(name, fn)`, which logs failures and never produces an unhandled rejection.
 - Timers that must not keep the process alive call `.unref()`.
-- Synchronous file I/O only where this document allows it (`PG.gather` if `toolApproval` must be synchronous, crash reports in `DBG`).
+- Synchronous file I/O only where this document allows it (`PG.gather`, so it works with a synchronous or an async `toolApproval`; crash reports in `DBG`).
 
 ### 15.8 Logging
 
@@ -2092,46 +2131,48 @@ Package versions of ESLint, `typescript-eslint` and dependency-cruiser are unver
 |---|---|---|---|
 | IC-D1 | Three channels on `BUS`; the core asks through a promise-returning `ask()`, renderers answer through `RendererPort.answer()`, which travels as a `UserCommand` | Core code reads as a simple `await`; deliverable 01 lists the answer as a user command; requests can be withdrawn by abort signal | Core calling renderer methods directly |
 | IC-D2 | `status` events carry a full snapshot | Idempotent; a late-mounted renderer is correct at once | Per-field change events |
-| IC-D3 | Every `tool-call-started` ends with exactly one `tool-call-ended`; `denied` and `interrupted` are end states | Renderers and NDJSON consumers can rely on pairing; no dangling cards | A separate denial event without an end |
+| IC-D3 | Every `tool-call-started` ends with exactly one `tool-result` or `tool-denied` (EB-G4), also when the turn is interrupted | Renderers and NDJSON consumers can rely on pairing; no dangling cards | A denial event that leaves the call open |
 | IC-D4 | `RedactedText` and `RedactedObject` brands in the shared kernel; only `src/redact/` may assert them | Forgetting redaction is a compile error (deliverable 04, section 7.3) | Runtime checks only |
-| IC-D5 | NDJSON is a projection of `AgentEvent` with the seven BRD types, mapped by one exhaustive switch | The two cannot drift; the BRD list is kept | Serialising internal events directly; a second event model |
+| IC-D5 | NDJSON is a projection of `AgentEvent` with the seven BRD types plus `notice` (IC-P6), mapped by one exhaustive switch | The two cannot drift; the BRD list is kept | Serialising internal events directly; a second event model |
 | IC-D6 | NDJSON `text` lines are whole blocks, not deltas | Each line is self-contained; redaction hold-back is already done | One line per delta |
 | IC-D7 | `schemaVersion` on every NDJSON line | A line read alone (`grep`, `jq` on one type) is interpretable; compatible with FR-UI-06 | Only on the first line |
 | IC-D8 | Every `tool-call` gets one `tool-result`, including denied calls; `done` carries `exitCode`, `outcome` and `result` | Simple consumers need no join logic; the final answer is one `jq` away | A separate `result` line type |
 | IC-D9 | With `--json`, stdout holds only NDJSON; human text goes to stderr | Every stdout line parses; FR-UI-06 sends errors to stderr | Mixing text into stdout |
 | IC-D10 | Tool services are injected at construction; `ToolContext` carries only per-call data | Tools are testable with fakes; the context stays small and stable | One large context with every service |
 | IC-D11 | Tools declare a safety descriptor (file paths, shell command, internal, MCP annotations), never a tier | `POL` alone decides tiers; MCP tools fit the same shape | Tools returning their own tier |
-| IC-D12 | `POL.decide` is pure over pre-gathered `CallFacts`; `PG.gather` does the `realpath` I/O first | Keeps HLD-D4 while symlinks are still resolved | `POL` calling the file system |
+| IC-D12 | `POL.decide` has no side effects and is asynchronous; it reads `CallFacts` per call through read-only ports that `BOOT` injects (`PG.gather` for `realpath`, audit health, MCP policy) | Keeps HLD-D4 and deliverable 06, UML-D11: symlinks resolved and audit health read at each call; decisions table-tested with fake ports | Facts pre-resolved by `AG` and passed in (deliverable 07, RT-D19) |
 | IC-D13 | One `AntaiError` base, one subclass per category, codes in one table with category, message key and exit code | Matches deliverable 01, section 10.2; one source for messages and exit codes | A class per error; string errors |
-| IC-D14 | Exit precedence 1, signals, 2, 3, 4, 5, 0; signals use 128 plus the signal number (pending BRD review, IC-P1, IC-P3) | Most severe and least finished first; shell convention for signals | First error wins; signals as 1 |
-| IC-D15 | Exit 5 for any denial in `run` (pending BRD review, IC-P2) | A CI job learns that an attempted action did not happen, whatever blocked it | Only `no-human` denials |
-| IC-D16 | Config merge strategies and project-layer rules in a typed key table beside the Zod schema | Merge code, `antai config` and docs read one source; no reliance on unverified Zod metadata APIs | Rules spread through merge code |
+| IC-D14 | Exit precedence 1, signals, 2, 3, 4, 5, 0; signals use 128 plus the signal number (beyond the BRD, IC-P1, IC-P3) | Most severe and least finished first; shell convention for signals | First error wins; signals as 1 |
+| IC-D15 | Exit 5 for any denial of an approvable call in `run`, by `research` mode or for lack of a human (beyond the BRD, IC-P2) | A CI job learns that an attempted action did not happen | Only `no-human` denials |
+| IC-D16 | Config merge strategies and project-layer rules in a typed key table beside the Zod schema | Merge code, `antai config` and docs read one source; no reliance on Zod metadata APIs the P0 spike has not confirmed | Rules spread through merge code |
 | IC-D17 | `ANTAI_*` variables come from an explicit table | An inherited variable cannot set an arbitrary safety key | Automatic mapping of every key |
 | IC-D18 | Catalogue entries have `what`, `next` and an optional `nextRun`; keys and placeholders are typed | NFR-USE-02 is checked by the compiler and a test; `run` suggests flags, not slash commands | Free-form strings |
 | IC-D19 | NDJSON schema version independent of the package version | A feature release does not force consumers to re-check the stream | Tying the schema to the package major |
 | IC-D20 | `Secret` wrapper for secret values crossing components | Accidental logging prints `[secret]` | Plain strings |
 | IC-D21 | Named exports only; `index.ts` is each folder's public API | Reliable renames and searches; enforceable boundaries | Default exports; deep imports |
-| IC-D22 | Shared vocabulary types in a new `src/shared/types/` | Types needed on both sides of the event boundary have no other legal home | Duplicating types per layer |
+| IC-D22 | Shared vocabulary types in `src/shared/domain/` (UML-D3) | Types needed on both sides of the event boundary have no other legal home | Duplicating types per layer |
 | IC-D23 | US spelling for code identifiers, British spelling for prose and user-facing text | Matches Node and library APIs; avoids mixed `normalise`/`normalize` names in one code base | British spelling everywhere |
 
 ---
 
 ## 17. Open questions
 
+No answer is expected soon. Each row's default is what this document uses; nothing here waits on an answer.
+
 | ID | Question | Options | Default assumed | Owner |
 |---|---|---|---|---|
-| Q11-1 | Can the generic `toolApproval` function return a promise in `ai@7.0.137`? (unverified) | Async; sync only | Async; if sync only, `PG.gather` uses `realpathSync` and the bash parser is loaded before the first `shell` call | P0 spike |
-| Q11-2 | How does the SDK present an error thrown from a tool's `execute` to the model (part name, output shape)? (unverified) | Tool-error part with the message; something else | Throw `ToolFailure` with the model-facing text | P0 spike, deliverable 08 |
-| Q11-3 | [USER] Should exit code 5 cover every denial in `run`, or only denials for lack of a human? | Every denial; `no-human` only | Every denial (IC-P2) | Daksh, BRD review |
-| Q11-4 | [USER] Use 130, 143 and 129 for runs ended by signals? | 128 plus signal; 1 | 128 plus signal (IC-P1) | Daksh, BRD review |
-| Q11-5 | [USER] Add NDJSON types for notices, retries, reasoning or a start line in a 1.x minor? | Add some; keep seven | Keep the seven BRD types in 1.0; notices and retries on stderr | Daksh |
-| Q11-6 | When a schema major ships, is the old major available behind a flag (e.g. `--json-schema 1`)? | Flag for one major; no | Decide at the first major; not needed in v1 | Deliverable 12 |
-| Q11-7 | Where is the public `$schema` URL for config and events, given Q1 (public or internal npm)? | unpkg path of the published package; GitLab raw URL; none | Package path only until Q1 is answered | Daksh, deliverable 16 |
-| Q11-8 | [USER] `antai run` with the home folder as workspace: refuse with exit 2 (the confirmation's safe default) or continue with a warning? | Refuse; warn and continue | Refuse with exit 2 and a hint to `cd` into a project | Daksh, deliverable 02 |
+| Q11-1 | Can the generic `toolApproval` function return a promise in `ai@7.0.137`? To be confirmed in the P0 spike | Async; sync only | Async, as deliverable 07 builds the wrapper and keeps `decide` asynchronous; if the SDK needs a synchronous answer, preloading the bash parser and `PG.gather`'s `realpathSync` make `decide` synchronous with the same results (deliverable 07, section 4.4) | P0 spike |
+| Q11-2 | How does the SDK present an error thrown from a tool's `execute` to the model (part name, output shape)? To be confirmed in the P0 spike | Tool-error part with the message; something else | Throw `ToolFailure` with the model-facing text | P0 spike, deliverable 08 |
+| Q11-3 | [USER] Should exit code 5 cover every denial in `run`, or only denials for lack of a human? | Every denial; `no-human` only | Every denial of an approvable call, by `research` mode or for lack of a human (IC-P2) | Daksh |
+| Q11-4 | [USER] Use 130, 143 and 129 for runs ended by signals? | 128 plus signal; 1 | 128 plus signal (IC-P1) | Daksh |
+| Q11-5 | [USER] Add NDJSON types for notices, retries, reasoning or a start line in a 1.x minor? | Add some; keep seven | The seven BRD types plus `notice` in 1.0 (IC-P6); retries, reasoning and a start line stay out, retries on stderr | Daksh |
+| Q11-6 | When a schema major ships, is the old major available behind a flag (e.g. `--json-schema 1`)? | Flag for one major; no | Old major behind a flag for one major release (section 5.6); nothing needed in v1 | Deliverable 12 |
+| Q11-7 | Where is the public `$schema` URL for config and events, given Q1 (public or internal npm)? | unpkg path of the published package; GitLab raw URL; none | Package path only; no public URL in v1 | Daksh, deliverable 16 |
+| Q11-8 | [USER] `antai run` with the home folder as workspace: refuse with exit 2 (the confirmation's safe default) or continue with a warning? | Refuse; warn and continue | As deliverable 02, SEC-D9: warn and continue in `research` or `manual`; exit 2 with a hint to `cd` into a project in `auto` or skip | Daksh, deliverable 02 |
 | Q11-9 | Which formatter? | Prettier; Biome | Prettier | Deliverable 16 |
-| Q11-10 | [USER] Add `--strict-config` for CI, turning config warnings into exit 2 (research E 2.6)? | Add; not in v1 | Not in v1 (not a BRD flag) | Daksh |
+| Q11-10 | [USER] Add `--strict-config` for CI, turning config warnings into exit 2? | Add; not in v1 | Not in v1 (not a BRD flag) | Daksh |
 
-Questions from earlier deliverables used here unchanged: Q01-2 (custom stdio transport), Q01-8 (redaction hold-back), Q01-12 (Zod JSON Schema export), Q01-16 (annotation drift and Safe status), Q04-11 (`models` key), Q03-2 (SDK results after abort).
+Defaults from other deliverables used here as decisions: antai's own stdio transport (deliverable 01); streamed text holding back the trailing word, at most 8 KB without whitespace and 16 KB for an open PEM block (02, section 6.4, SEC-D14); Zod 4's JSON Schema export (01); a tool whose MCP definition or annotations changed loses Safe and stays available at Normal until the change is accepted (FR-MCP-06); `models` aliases told apart from per-model metadata by value type (04, 09); no reliance on SDK results after an abort (03).
 
 ---
 
@@ -2166,25 +2207,12 @@ Questions from earlier deliverables used here unchanged: Q01-2 (custom stdio tra
 | D19 | 4.3, 12 |
 | DLV-SW-09 | 5.6, 10.5 |
 | DLV-DOC-03, DLV-DOC-09 | 10.5, 14 |
-| A-C3, A-C5, A-C7, A-C8, A-C11 | 8.4, 8.5, 8.6, 8.7 |
-| A-S5, A-S6, A-S7, A-S8, A-S10 | 4.3, 6.2, 7.3, 7.4, 8.3, 11.2 |
-| Deliverable 04 P3, P6, P7 | 7.1, 9.2, 10.2 |
+| AI SDK v7 API names; SDK `maxRetries: 0` with `RTY` | 8.4, 8.5, 8.6, 8.7 |
+| Keys outside `process.env`; redact, then cap; type-ahead discard; approval signing; `O_NOFOLLOW` | 4.3, 6.2, 7.3, 7.4, 8.3, 11.2 |
+| Deliverable 04 P7 | 7.1, 9.2 |
 
 ---
 
 ## 19. Sources
 
-Research notes (checked 12 and 13 October 2026), which carry the full source lists:
-
-- Research B, stack verification: `ToolApprovalStatus`, `tool-approval-request` and `tool-approval-response` shapes, `ToolContent`, `InvalidToolApprovalSignatureError`, `experimental_toolApprovalSecret`, `fingerprintTools` and `detectToolDrift` in `ai`, `MockLanguageModelV4`, Zod peer range, TypeScript 6.0 and 7.0 status.
-- Research E, comparable agents: core-to-UI event unions (Codex `EventMsg`, Gemini `GeminiEventType`, OpenCode `session.retry.scheduled`), separate approval channels, allow-listed log serialisers, `--strict-config`, error message style.
-- Research F, platform and OAuth: `LanguageModelUsage` shape, `wrapLanguageModel`, telemetry callbacks, Ink `suspendTerminal()`.
-
-Primary sources used directly:
-
-- AI SDK v7 type definitions: https://unpkg.com/ai@7.0.137/dist/index.d.ts
-- AI SDK v7 migration guide: https://ai-sdk.dev/docs/migration-guides/migration-guide-7-0
-- AI SDK tool approvals: https://ai-sdk.dev/docs/agents/tool-approvals
-- Semantic Versioning 2.0.0: https://semver.org/
-- GNU Bash manual, exit status (128 plus the signal number): https://www.gnu.org/software/bash/manual/bash.html#Exit-Status
-- Node.js `util.inspect.custom`: https://nodejs.org/api/util.html#utilinspectcustom
+External facts in this document (package versions, SDK type and option names, provider limits, the shell's 128-plus-signal exit convention) were checked on 12 October 2026 and are stated where they are used; the P0 spike re-checks the ones the design depends on.

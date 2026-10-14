@@ -8,7 +8,8 @@
 | **Version** | 0.1 |
 | **Date** | 12 October 2026 |
 | **Author** | Daksh Nagpal |
-| **Based on** | BRD_1 v0.4, ARCHITECTURE_1 v0.1, DELIVERABLES_1 v0.2, deliverable 01 v0.1 (component IDs, module paths, on-disk layout), research notes B, C, E and F |
+| **Based on** | BRD_1 v0.4, HLD.png, deliverable 00 v0.3 (register), deliverable 01 v0.1 (component IDs, module paths, on-disk layout), deliverables 02, 03, 07 to 12, 14 and 15 (where named in the text) |
+| **How to use** | Reference design, not a fixed rail. Where the technology needs something different or extra, the implementation may change it; the change is then made in every deliverable it touches, so the set keeps agreeing. |
 
 ## Contents
 
@@ -24,7 +25,7 @@
 10. Schema versioning and migration
 11. Permissions on each operating system
 12. Sizing
-13. Proposals pending BRD review
+13. Additions beyond BRD v0.4
 14. Design decisions
 15. Open questions
 16. Traceability
@@ -51,7 +52,9 @@ antai has no database and no server. Everything it keeps is a local file. This d
 | Debug log content, crash report content, `/usage` | Deliverable 15 |
 | Tests and fixtures | Deliverable 14 |
 
-Storage components and their modules (deliverable 01, section 5.9): `HS` history store `src/infra/history/`, `AUD` audit log writer `src/infra/audit/`, `RET` retention sweeper `src/infra/retention/`, `CRED` credential store `src/infra/credentials/`, `FSX` safe file I/O `src/infra/fs/`, `DBG` debug logger and crash reporter `src/infra/log/`, `MCPM` MCP manager `src/infra/mcp/`, `MOA` MCP OAuth client provider `src/infra/mcp/oauth/`, `CFG` config resolver `src/config/`, `TRUST` workspace trust gate `src/config/trust/`, `RED` redactor `src/redact/`, `PLAT` platform and path utilities `src/shared/platform/`. Every write under `~/.antai` goes through `FSX`, and every persisted text passes `RED` first (deliverable 01, rule 10).
+Storage components and their modules (deliverable 01, section 5.9): `HS` history store `src/infra/history/`, `AUD` audit log writer `src/infra/audit/`, `RET` retention sweeper `src/infra/retention/`, `CRED` credential store `src/infra/credentials/`, `FSX` safe file I/O `src/infra/fs/`, `DBG` debug logger and crash reporter `src/infra/log/`, `MCPM` MCP manager `src/infra/mcp/`, `MOA` MCP OAuth client provider `src/infra/mcp/oauth/`, `CFG` config resolver `src/config/`, `TRUST` workspace trust gate `src/config/trust/`, `RED` redactor `src/redact/`, `PLAT` platform and path utilities `src/shared/platform/`. Every write under `~/.antai` goes through `FSX`, and every persisted text passes `RED` first (deliverable 01, section 12, rule 10).
+
+In HLD.png terms (deliverable 01, section 1.3 has the full mapping): `HS` is the History box (`infra/history`, "saves the chat"); `CFG` and `TRUST` are the Config box; `RED` is the Secret Filter; `FSX`, `MCPM`, `MOA` and `DBG` are Machine Adapters (disk, MCP servers). Three placements go beyond the drawing. The drawing shows API keys with Config; `CRED` keeps them under `infra/credentials/`, because writing a secret file is adapter work. `AUD` and `RET` sit beside History under `infra/`, because they write the same folder tree. `PLAT` lives in `shared/`, because every layer needs the same paths.
 
 ### 1.3 Storage principles
 
@@ -61,8 +64,8 @@ Storage components and their modules (deliverable 01, section 5.9): `HS` history
 | SP2 | **Human-readable formats.** JSON for state, JSONL for logs and sessions, Markdown for context files. UTF-8, LF line ends. | A user or a reviewer can inspect, grep and delete anything with standard tools. The secret-scan test reads text (AC-22). | D7, NFR-SEC-05 |
 | SP3 | **Append-only where possible.** Sessions, the audit log and the debug log only ever grow by whole lines. | A crash can damage at most the last line, never earlier records (NFR-REL-01). | FR-HIS-02, FR-HIS-13 |
 | SP4 | **Atomic replace everywhere else.** Small JSON state files are rewritten through a temp file and a rename, under a lock when several processes can write them. | A reader sees the old file or the new one, never half of each. | FR-HIS-08, FR-SEC-05 |
-| SP5 | **Redact before write.** No text reaches disk without passing `RED`, except the credentials file, whose job is to hold secrets. | NFR-SEC-05 includes history, audit and logs. No comparable agent does this (research E, verdict 6), so it is designed and tested here. | FR-HIS-07, FR-SEC-03 |
-| SP6 | **Same bytes as the model saw.** A stored tool result is the redacted, capped text the model received; a resumed session sends the model what the live session sent, minus the instructions, which are rebuilt. | Resume reproduces the context exactly; raw output exists nowhere. | FR-HIS-07, FR-UI-03, A-C6 |
+| SP5 | **Redact before write.** No text reaches disk without passing `RED`, except the credentials file, whose job is to hold secrets. | NFR-SEC-05 includes history, audit and logs. One redaction step on the write path covers every file, and the seeded-secret scan tests it (section 7.3). | FR-HIS-07, FR-SEC-03 |
+| SP6 | **Same bytes as the model saw.** A stored tool result is the redacted, capped text the model received; a resumed session sends the model what the live session sent, minus the instructions, which are rebuilt. | Resume reproduces the context exactly; raw output exists nowhere. | FR-HIS-07, FR-UI-03 |
 | SP7 | **Versioned formats.** Every antai-owned file or record carries a version; readers accept older versions and never guess at newer ones. | Sessions outlive antai upgrades and SDK upgrades (deliverable 01, TD4). | — |
 | SP8 | **Nothing outside `~/.antai` and the workspace.** No `os.tmpdir()`, no XDG folders, no registry, no caches in the workspace. Workspace writes only through approved tool calls, `antai init` and `antai mcp add --project`. | NFR-PRIV-02 and the file-location test in DLV-VER-01. | NFR-PRIV-02, D11 |
 | SP9 | **Fail safe, not fail silent.** A corrupt file is moved aside, never overwritten. A sweep that cannot read its settings does not run. A missing audit log stops side effects (section 6.10). | Data loss and unaudited actions are the two failures that matter. | NFR-REL-01, FR-HIS-13 |
@@ -71,19 +74,19 @@ Storage components and their modules (deliverable 01, section 5.9): `HS` history
 
 | | JSONL and JSON files (chosen) | SQLite |
 |---|---|---|
-| Who does it | Codex (sessions as JSONL, SQLite only for its index), Claude Code, Gemini CLI | OpenCode 2.x (`opencode.db`, WAL, `synchronous=NORMAL`, `busy_timeout=5000`, file, `-wal` and `-shm` chmod `0600`, 50 drizzle migrations); Goose since v1.10.0 (`sessions.db`, earlier `.jsonl` files imported) |
-| Runtime dependency | `node:fs` only | `better-sqlite3` is a native module, excluded by NFR-COMP-04. `node:sqlite` exists in recent Node lines but its stability status on Node 22, 24 and 26 is not covered by the research notes (unverified) |
+| Fit with the BRD | One JSONL file per session, as D7 and FR-HIS-01 fix | Would replace the BRD's session format; the database, `-wal` and `-shm` files would each need `0600` |
+| Runtime dependency | `node:fs` only | `better-sqlite3` is a native module, excluded by NFR-COMP-04. `node:sqlite` exists in recent Node lines, but its stability on Node 22, 24 and 26 is not established, and nothing in antai needs it |
 | Crash safety | One writer per session file and whole-line appends; a torn last line is skipped | Transactions and WAL; strong, but the WAL and shared-memory files add two more files to protect |
 | Concurrency | Not needed for sessions (one writer each, FR-HIS-11). The only shared files are small and use a lock | Built in (busy timeout) |
 | Inspection and secret scan | `cat`, `grep`, `jq`; the scan reads bytes | Needs SQL tooling; the scan must query tables |
 | Queries | `/history` reads one cached index (`index.json`); 1,000 sessions in under 200 ms is met by a JSON cache (section 12) | Indexed queries |
-| Schema change | Version field and in-memory migration | Migration scripts (Codex 61, OpenCode 50) |
+| Schema change | Version field and in-memory migration | Migration scripts that run against the user's database at upgrade |
 
-The BRD fixes JSONL per session (D7, FR-HIS-01). The research confirms it is the mainstream choice for file-based agents and that the extra power of SQLite is not needed at antai's scale. The design keeps the BRD's JSONL and the `index.json` cache, and treats the index as rebuildable at any time.
+The BRD fixes JSONL per session (D7, FR-HIS-01). At antai's scale (one writer per session, about 1,000 sessions, section 12) the extra power of SQLite is not needed. The design keeps the BRD's JSONL and the `index.json` cache, and treats the index as rebuildable at any time.
 
-### 1.5 Items in this document that are pending BRD review
+### 1.5 Items in this document that go beyond BRD v0.4
 
-Where this design needs something the BRD does not say, or improves on it, the text says "(pending BRD review, ref)". Section 13 lists every such item with its reason. The ones that change behaviour are: an append-only index (P1, alternative only), appending step messages earlier (P2, alternative only), retention keys from global config only (P3), wider secret-path coverage for credential copies (P4), read protection for history in a home-folder workspace (P5), three config keys that an untrusted project must not set (P6), and failing closed when the audit log cannot be written (P7).
+Where this design needs something the BRD does not say, or improves on it, the text says "(beyond the BRD, ref)". Section 13 lists every such item with its reason; the design uses them as stated. The ones that change behaviour are: retention keys from global config only (P3, now in BRD v0.4, FR-CFG-01), wider secret-path coverage for credential copies (P4), read protection for history in a home-folder workspace (P5), three config keys that an untrusted project must not set (P6, now in BRD v0.4, FR-CFG-01 and FR-CFG-04), and failing closed when the audit log cannot be written (P7). P1 (an append-only index) and P2 (appending step messages earlier) are recorded alternatives that v1 does not use.
 
 ---
 
@@ -93,17 +96,17 @@ Where this design needs something the BRD does not say, or improves on it, the t
 
 antai resolves its home as `path.join(os.homedir(), '.antai')` once, in `PLAT`, and every component asks `PLAT` for it.
 
-| OS | `os.homedir()` comes from (research F 2.5) | Global home | As seen from Git Bash |
+| OS | `os.homedir()` comes from | Global home | As seen from Git Bash |
 |---|---|---|---|
 | macOS | `$HOME`, else the passwd entry | `/Users/<name>/.antai` | — |
 | Linux | `$HOME`, else the passwd entry | `/home/<name>/.antai` | — |
 | Windows 10/11 | `%USERPROFILE%`, else the current user's profile folder. `HOME` is ignored | `C:\Users\<name>\.antai` (`%USERPROFILE%\.antai`) | `/c/Users/<name>/.antai`; `PLAT` normalises both forms before any path check (FR-SH-13) |
 
-**Environment overrides.** The BRD defines no variable that moves the antai home (`ANTAI_*` variables are config values, FR-CFG-01; `ANTAI_GIT_BASH_PATH` points at a program). The home moves only when `HOME` (POSIX) or `USERPROFILE` (Windows) is changed, because `os.homedir()` honours them. Tests isolate antai this way; on Windows a test must set `USERPROFILE`, not `HOME` (AC-08 says "HOME", which is not enough on Windows). An `ANTAI_HOME` override is an open question (Q04-12).
+**Environment overrides.** The BRD defines no variable that moves the antai home (`ANTAI_*` variables are config values, FR-CFG-01; `ANTAI_GIT_BASH_PATH` points at a program). The home moves only when `HOME` (POSIX) or `USERPROFILE` (Windows) is changed, because `os.homedir()` honours them. Tests isolate antai this way; on Windows a test must set `USERPROFILE`, not `HOME` (AC-08 says "HOME", which is not enough on Windows). v1 has no `ANTAI_HOME` override: the path guard would have to follow it, and `HOME` or `USERPROFILE` already serve tests.
 
 **Workspace equals home.** When antai starts in the home folder (it warns, FR-TOOL-09), `<workspace>/.antai` and `~/.antai` are the same folder. `CFG` compares the two realpaths and, when they match, loads that folder once, as the global layer. Otherwise the same `config.json` would be read twice, once as an untrusted project file.
 
-**Long paths and names.** Node's file system calls use `\\?\` paths on Windows, so the 260-character limit does not apply to them (research F 2.5). antai's own file names are short, lowercase and never contain `:`, which Windows forbids.
+**Long paths and names.** Node's file system calls use `\\?\` paths on Windows, so the 260-character limit does not apply to them. antai's own file names are short, lowercase and never contain `:`, which Windows forbids.
 
 ### 2.2 DS-1.1 Global home
 
@@ -120,7 +123,7 @@ flowchart LR
         CTX["③ INS · PRF · SKR"]
         HS["⑥ HS · RET"]
         AUD["⑥ AUD"]
-        DBG["⑥ DBG · LIFE"]
+        DBG["⑥ DBG · ① LIFE"]
     end
     subgraph HOME["~/.antai · 0700"]
         direction TB
@@ -131,7 +134,7 @@ flowchart LR
         F5["AGENT.md · profiles/ · skills/"]
         F6["sessions/<br/>ID.jsonl · index.json · locks"]
         F7["audit/<br/>YYYY-MM-DD.jsonl"]
-        F8["logs/<br/>debug and crash files"]
+        F8["logs/<br/>debug, crash and doctor files"]
     end
     RED["⑦ RED<br/>redact before write"]
     CFG -- "read" --> F1
@@ -184,7 +187,8 @@ Directory tree (names marked "proposed" in deliverable 01, section 6.3, are conf
 │   └── <YYYY-MM-DD>.jsonl              0600, one per UTC day
 └── logs/                               0700, DBG
     ├── debug-<session-id>.jsonl        only with --debug; one rotated copy .1.jsonl
-    └── crash-<YYYYMMDDTHHMMSSZ>-<pid>.json
+    ├── crash-<YYYYMMDDTHHMMSSZ>-<pid>.json
+    └── report-<YYYYMMDDTHHMMSSZ>.json   antai doctor --bundle (deliverable 15)
 ```
 
 Transient names that may appear anywhere above: `<name>.tmp-…` (atomic-replace temp file, deleted after the rename) and `<name>.corrupt-<YYYYMMDDTHHMMSSZ>` (an unparseable antai-owned file moved aside).
@@ -262,6 +266,7 @@ Identifiers `F01`… are used in later sections. "User" in the owner column mean
 | F17 | `*.lock` beside F03 to F06, `retention.lock` | `FSX` | JSON | When a short lock is taken | Competing processes | `wx` create, delete on release |
 | F18 | `<name>.tmp-…` | `FSX` | as target | During an atomic replace | Never | Written, then renamed over the target |
 | F19 | `<name>.corrupt-<ts>`, `mcp.json.bak` | `FSX` | as original | Corrupt antai-owned file found; `mcp.json` edited | Never by antai | Rename (corrupt), copy (backup) |
+| F20 | `logs/report-<YYYYMMDDTHHMMSSZ>.json` | `BOOT` diagnostics (deliverable 15) | JSON | `antai doctor --bundle` without a path | Never by antai (path printed) | Written once with `wx`; never overwrites |
 | W1 | Workspace instruction files | User; `INS` | Markdown | By the user, or `antai init` | Start | `antai init` writes `AGENT.md` with `wx` (never overwrites) |
 | W2 | `.antai/config.json` | User; `CFG` | JSONC | By the user | Start | Never by antai |
 | W3 | `.antai/mcp.json` | User and `CLI` | JSONC | By the user or `antai mcp add --project` | Start, after trust | Comment-preserving edit, atomic replace; no backup in the repository |
@@ -278,7 +283,7 @@ Identifiers `F01`… are used in later sections. "User" in the owner column mean
 | F03 | `0600` when antai creates it | Should not; antai warns on literal tokens (FR-MCP-08) | User; `.bak` until the next edit | Read cap 1 MiB | `mcp.schema.json` (published) | FR-MCP-02, 03, 08 |
 | F04 | `0600` | **Yes**: provider keys, OAuth tokens, client registrations | Until `antai logout`, `antai mcp logout` or `antai mcp remove` | Small (section 12) | `credentials` (internal) | FR-MOD-04, FR-SEC-05, FR-MCP-11, D20 |
 | F05 | `0600` | No | Kept | ~1 KB per workspace | `trusted` (internal) | FR-CFG-04 |
-| F06 | `0600` | No | Kept | 256 KB of definitions per server | `mcp-fingerprints` (internal) | FR-MCP-09, D29, A-S11 |
+| F06 | `0600` | No | Kept | 256 KB of definitions per server | `mcp-fingerprints` (internal) | FR-MCP-09, D29 |
 | F07–F09 | User's | No | User | Instruction files cut at 20 KB when assembled | `profile-frontmatter`, `skill-frontmatter` (published) | FR-INS, FR-PRF-01, FR-SKL-01 |
 | F10 | `0600` | No (redacted at write) | `history.retentionDays` (30) after last activity | Soft warning at 50 MB; 4 MiB per line | `session-record.schema.json` (published) | FR-HIS-01..12, NFR-REL-01 |
 | F11 | `0600` | No | Session lifetime; stale ones removed | < 200 B | `lock` (internal) | FR-HIS-11 |
@@ -290,6 +295,7 @@ Identifiers `F01`… are used in later sections. "User" in the owner column mean
 | F17 | `0600` | No | Seconds | < 200 B | `lock` | FR-HIS-08 |
 | F18 | Same as target (`0600` for F04) | As target | Deleted after rename; stale after 1 hour | As target | — | NFR-REL-01 |
 | F19 | As original | `credentials.json.corrupt-…` **yes** | 30 days | As original | — | NFR-REL-01 |
+| F20 | `0600` | No (redacted again when written; home shown as `~`) | 7 days | 5 MiB | — (deliverable 15, section 6.4) | NFR-PRIV-01; beyond the BRD (deliverable 15, OBS-P5) |
 | W1–W6 | Repository defaults | `.env*` yes; others no | User | — | — | FR-INS, FR-CFG, FR-SEC-03 |
 
 ---
@@ -425,9 +431,9 @@ erDiagram
 | `MCP_FILE`, `MCP_SERVER_DEF` | F03, W3, W4 | file; server name | User, `CLI` | User | Section 5.4 |
 | `PROVIDER_KEY` | F04 `providers` | provider name | `CRED` | Until logout | FR-MOD-04 |
 | `OAUTH_TOKEN_SET` | F04 `mcpOAuth` | canonical MCP server URL | `MOA` via `CRED` | Until logout or invalid grant | Carries the authorization-server pin |
-| `OAUTH_CLIENT_REG` | F04 `oauthClients` | authorization-server issuer | `MOA` via `CRED` | Until `antai mcp remove` of the last server using it | MCP 2026-07-28 requires issuer keying (research F 1.3) |
+| `OAUTH_CLIENT_REG` | F04 `oauthClients` | authorization-server issuer | `MOA` via `CRED` | Until `antai mcp remove` of the last server using it | MCP 2026-07-28 requires issuer keying |
 | `TRUST_ENTRY` | F05 | `projectKey` | `TRUST` | Kept | Trusted and untrusted answers |
-| `FINGERPRINT_BASELINE`, `TOOL_BASELINE` | F06 | server identity; tool name | `MCPM` | Kept | SDK fingerprint plus a separate annotations hash (A-S11) |
+| `FINGERPRINT_BASELINE`, `TOOL_BASELINE` | F06 | server identity; tool name | `MCPM` | Kept | SDK fingerprint plus a separate annotations hash |
 | `INSTRUCTION_FILE`, `PROFILE`, `SKILL`, `SKILL_EXTRA_FILE` | F07–F09, W1, W5, package | path; name | User | User | Read-only for antai |
 | `DEBUG_LOG`, `DEBUG_LINE` | F15 | session id | `DBG` | 7 days | Only with `--debug` |
 | `CRASH_REPORT` | F16 | time and pid | `DBG`, `LIFE` | 7 days | No conversation text |
@@ -456,7 +462,7 @@ erDiagram
 | Key | Type | Default | Meaning | Project layer |
 |---|---|---|---|---|
 | `model` | `provider:model` or alias | `groq:openai/gpt-oss-120b` | Default model (FR-MOD-02) | Trusted only (FR-CFG-04) |
-| `models.<alias>` | string | `fast` → `groq:openai/gpt-oss-20b` (A-C14) | Model alias (FR-MOD-03) | Trusted only, treated as `model` |
+| `models.<alias>` | string | `fast` → `groq:openai/gpt-oss-20b`, `smart` → `groq:openai/gpt-oss-120b` (deliverable 09, 4.4) | Model alias (FR-MOD-03) | Trusted only, treated as `model` |
 | `models.<provider:model>.contextWindow` | integer | Built-in table, else 32,000 | Context size for pruning (FR-AGT-05) | Any layer. The key shares `models` with aliases (P8) |
 | `providers.<name>.type` | `"openai-compatible"` | — | Custom endpoint (FR-MOD-08) | Trusted only |
 | `providers.<name>.baseURL` | URL | Package or preset default | Endpoint (FR-MOD-07) | Trusted only |
@@ -465,19 +471,19 @@ erDiagram
 | `mode` | `research`, `manual`, `auto` | `manual` | Starting mode | `research` or `manual` only, trusted only (FR-CFG-05) |
 | `effort` | `provider-default`, `none`, `low`, `medium`, `high` | `provider-default` | Reasoning effort (FR-MOD-06) | Any layer |
 | `maxSteps` | integer 1–100 | 25 | Step cap (FR-AGT-02) | Any layer, ceiling 100 |
-| `context.pruneAt` | number 0–1 | 0.75 | Pruning threshold (FR-AGT-05) | Any layer |
+| `context.pruneAt` | number, more than 0 and at most 1 | 0.75 | Pruning threshold (FR-AGT-05) | Any layer |
 | `shell.timeoutMs`, `shell.timeouts` | ms; map of pattern → ms | 120,000; dev servers 30,000 | FR-SH-07 | Any layer |
 | `shell.allow` | string[] | [] | Safe-list additions (FR-SH-05) | Trusted only; combined |
 | `shell.dangerous`, `shell.block` | string[] | [] | Tighten only | Always applied; combined |
-| `shell.gitBashPath` | path | "" | Git Bash override (FR-SH-11) | **Global only** (pending BRD review, P6): a project value would choose the program that runs every command |
+| `shell.gitBashPath` | path | "" | Git Bash override (FR-SH-11) | **Global only** (FR-CFG-01, FR-SH-11): a project value would choose the program that runs every command |
 | `tools.disabled` | string[] | [] | FR-TOOL-10 | Combined |
-| `mcp.tools.allow` | string[] of `mcp__<server>__<tool>` | [] | Treat as Safe (FR-MCP-06) | **Trusted only** (pending BRD review, P6): an untrusted project could otherwise make global servers' tools run without asking |
+| `mcp.tools.allow` | string[] of `mcp__<server>__<tool>` | [] | Treat as Safe (FR-MCP-06) | **Trusted only** (FR-CFG-04, FR-MCP-06): an untrusted project could otherwise make global servers' tools run without asking |
 | `mcp.tools.deny` | string[] | [] | Never offer | Combined |
-| `secrets.paths`, `secrets.patterns` | string[] | [] | Extra secret paths and patterns (FR-SEC-01, 03) | Add only (Q01-22 on pattern safety) |
+| `secrets.paths`, `secrets.patterns` | string[] | [] | Extra secret paths and patterns (FR-SEC-01, 03) | Add only; a project pattern that fails the static safety check is dropped with a warning (deliverable 02, SEC-D16) |
 | `history.enabled` | boolean | true | Store conversations (FR-HIS-10) | `false` in any layer wins |
-| `history.retentionDays` | integer ≥ 0 | 30 | FR-HIS-09; `0` keeps forever | **Global only** (pending BRD review, P3) |
-| `audit.retentionDays` | integer ≥ 0 | 90 | FR-HIS-13; `0` keeps forever (P9) | **Global only** (pending BRD review, P3) |
-| `workspace.extraReadPaths` | path[] | [] | Extra read roots (FR-TOOL-09) | **Global only** (pending BRD review, P6): a project value would open the home folder to reads without asking |
+| `history.retentionDays` | integer ≥ 0 | 30 | FR-HIS-09; `0` keeps forever | **Global only** (FR-CFG-01) |
+| `audit.retentionDays` | integer ≥ 0 | 90 | FR-HIS-13; `0` keeps forever (P9) | **Global only** (FR-CFG-01) |
+| `workspace.extraReadPaths` | path[] | [] | Extra read roots (FR-TOOL-09) | **Global only** (FR-CFG-01, FR-TOOL-09): a project value would open the home folder to reads without asking |
 
 Example (comments allowed):
 
@@ -516,11 +522,11 @@ Example (comments allowed):
 | `startupTimeoutMs` | integer | No (30000) | Connect and tool-list time limit; `run` waits up to this before its first step (deliverable 10) | `30000` |
 | `toolTimeoutMs` | integer | No (120000) | Time limit for one tool call (deliverable 10) | `120000` |
 
-Files keep the `${VAR}` text; substituted values exist only in memory and are registered with `RED` (FR-MCP-03). `antai mcp add` and `remove` edit the file with a comment-preserving JSONC edit (library chosen in P1, unverified) instead of re-serialising it, then replace it atomically; the global file's previous version is kept as `mcp.json.bak`. A literal token passed to `antai mcp add` is warned about (FR-MCP-08) and, if the user keeps it, written as given, which is why the file is created `0600`.
+Files keep the `${VAR}` text; substituted values exist only in memory and are registered with `RED` (FR-MCP-03). `antai mcp add` and `remove` edit the file with a comment-preserving JSONC edit (library chosen in phase P1) instead of re-serialising it, then replace it atomically; the global file's previous version is kept as `mcp.json.bak`. A literal token passed to `antai mcp add` is warned about (FR-MCP-08) and, if the user keeps it, written as given, which is why the file is created `0600`.
 
 ### 5.5 `credentials.json`
 
-The only file that holds secrets. `CRED` loads it at start, registers every value with `RED` (FR-SEC-03 e) and passes keys straight to provider factories, never into `process.env` (A-S5).
+The only file that holds secrets. `CRED` loads it at start, registers every value with `RED` (FR-SEC-03 e) and passes keys straight to provider factories, never into `process.env` or a child environment.
 
 | Field | Type | Required | Meaning | Example |
 |---|---|---|---|---|
@@ -530,12 +536,12 @@ The only file that holds secrets. `CRED` loads it at start, registers every valu
 | `mcpOAuth.<serverUrl>` | object | — | One token set per **canonical MCP server URL** (the RFC 8707 `resource` value: lowercase scheme and host, no fragment, no trailing slash) | key `"https://mcp.example.com/mcp"` |
 | `….serverNames` | string[] | Yes | Config names last seen for this URL, for `antai mcp logout <name>` and display | `["linear"]` |
 | `….issuer` | string | Yes | Authorization-server issuer the tokens came from | `"https://auth.example.com"` |
-| `….authorizationServer` | object | Yes | The SDK's pin `{ issuer, authorizationServerUrl, tokenEndpoint }` (research F 1.1) | |
+| `….authorizationServer` | object | Yes | The SDK's pin `{ issuer, authorizationServerUrl, tokenEndpoint }` | |
 | `….tokens` | object | Yes | The SDK's `OAuthTokens` as saved through `saveTokens` (`access_token`, `token_type`, `expires_in`, `refresh_token`, `scope`, plus fields the SDK adds) | |
-| `….obtainedAt`, `….expiresAt` | time | Yes; `expiresAt` when `expires_in` is given | For proactive refresh at start (research F 1.6) | |
+| `….obtainedAt`, `….expiresAt` | time | Yes; `expiresAt` when `expires_in` is given | For proactive refresh at start | |
 | `oauthClients.<issuer>` | object | — | Client registration per issuer: `client_id`, optional `client_secret`, `client_id_issued_at`, `client_secret_expires_at`, `redirect_uris`, `token_endpoint_auth_method`, as returned by the SDK; plus `dynamic` and `registeredAt` | |
 
-Why the token set is keyed by URL, not by server name: names are local labels, and a trusted project can define a server called `github` that points elsewhere. The SDK sends whatever `tokens()` returns as a bearer token on every request (research F 1.1), so a name-keyed store would hand one server's token to another. Client registrations are keyed by issuer because the MCP 2026-07-28 authorization spec requires it and requires re-registration when the issuer changes (research F 1.3).
+Why the token set is keyed by URL, not by server name: names are local labels, and a trusted project can define a server called `github` that points elsewhere. The SDK sends whatever `tokens()` returns as a bearer token on every request, so a name-keyed store would hand one server's token to another. Client registrations are keyed by issuer because the MCP 2026-07-28 authorization spec requires it and requires re-registration when the issuer changes.
 
 ```json
 {
@@ -570,7 +576,7 @@ Why the token set is keyed by URL, not by server name: names are local labels, a
 }
 ```
 
-**OAuth write rules.** `saveTokens` and `saveClientInformation` are read-modify-writes under `credentials.json.lock`. A refresh takes the lock, re-reads the file and uses a newer token set if another process refreshed first, because refresh tokens rotate (deliverable 01, section 10.4). `invalidateCredentials('tokens', { tokens })` deletes only if the stored set still equals the one given (compare-and-delete, research F 1.1). `antai mcp logout` deletes the token set; `antai mcp remove` also deletes the client registration when no other configured server uses that issuer. PKCE verifiers, `state` values and authorization codes are never written (section 7.2).
+**OAuth write rules.** `saveTokens` and `saveClientInformation` are read-modify-writes under `credentials.json.lock`. A refresh takes the lock, re-reads the file and uses a newer token set if another process refreshed first, because refresh tokens rotate (deliverable 01, section 10.4). `invalidateCredentials('tokens', { tokens })` deletes only if the stored set still equals the one given (compare-and-delete). `antai mcp logout` deletes the token set; `antai mcp remove` also deletes the client registration when no other configured server uses that issuer. PKCE verifiers, `state` values and authorization codes are never written (section 7.2).
 
 ### 5.6 `trusted.json`
 
@@ -628,12 +634,13 @@ Header (`type: "session"`, always `seq` 0; its `ts` is the BRD's "created time")
 | `antaiVersion`, `sdkVersion` | string | Yes | antai version and exact `ai` version, so a later converter knows the `ModelMessage` shape (deliverable 01, TD4) | `"1.0.0"`, `"7.0.137"` |
 | `os` | `darwin`, `linux`, `win32` | Yes | Platform | |
 | `forkedFrom` | session ID or null | Yes | Set when this session is a copy (FR-HIS-11) | `null` |
+| `promptVersion` | string | No | `PROMPT_VERSION` of the instructions when the session was created (deliverable 08, section 14.2) | `"1.0.0"` |
 
 ### 5.8 `message` records
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `message` | AI SDK `ModelMessage` (`user`, `assistant` or `tool` role) | Yes | Stored as produced: user messages built by `SC`, response messages from `result.responseMessages` (A-C6). No `system` messages: instructions are rebuilt on resume |
+| `message` | AI SDK `ModelMessage` (`user`, `assistant` or `tool` role) | Yes | Stored as produced: user messages built by `SC`, response messages from `result.responseMessages`. No `system` messages: instructions are rebuilt on resume |
 | `synthetic` | `"interrupted"` | No | A tool result antai created for a call that has none (FR-AGT-04, FR-HIS-02) |
 | `partial` | boolean | No | Assistant text cut off by Esc (FR-AGT-04) |
 | `compaction` | `{ replacesThroughSeq, trigger }` | No | Marks a `/compact` summary (FR-AGT-06). On resume, the model gets this message and every message record after it; earlier ones stay in the file |
@@ -659,21 +666,21 @@ Common fields: `kind`, `turn`, and `toolCallId` where a tool call is involved. E
 | `retry` | `RTY` scheduled a retry | `provider`, `attempt`, `at`, `reason` | FR-ERR-02 |
 | `context` | Pruning ran in a turn, or the turn stopped over the window (at most once per turn) | `action` (`pruned`, `stopped`), `tokensBefore`, `tokensAfter`, `window` | FR-AGT-05 |
 | `compaction` | A summary record was written | `trigger` (`user`, `overflow`), `replacesThroughSeq`, `tokensBefore`, `tokensAfter` | FR-AGT-06 |
-| `mcp-drift` | Tool definitions or annotations differ from the baseline | `server`, `added`, `removed`, `changed`, `annotationsChanged` (tool names only) | FR-MCP-09, A-S11 |
-| `resume` | The session was resumed, in place or as a copy | `from`, `forked`, `reason` (`locked`, `format`) | FR-HIS-04, 11 |
+| `mcp-drift` | Tool definitions or annotations differ from the baseline | `server`, `added`, `removed`, `changed`, `annotationsChanged` (tool names only) | FR-MCP-09 |
+| `resume` | The session was resumed, in place or as a copy | `from`, `forked`, `reason` (`locked`, `format`), `promptVersion` (optional, deliverable 08, section 14.2) | FR-HIS-04, 11 |
 | `recovery` | The reader dropped a torn or unparseable line | `droppedLines`, `droppedBytes` | NFR-REL-01 |
-| `end` | The session ended normally | `reason` (`exit`, `clear`, `run-complete`, `signal`), `exitCode` | FR-HIS-06 |
+| `end` | The session ended (a crash writes none) | `reason` (`exit`, `clear`, `resume`, `run-complete`, `signal`, or `error` for a `run` stopped by an error, exit 1 or 3), `exitCode` | FR-HIS-06 |
 
 ### 5.10 `usage` and `title` records
 
-`usage`, one per turn (FR-HIS-02), in antai's own field names so an SDK rename (research B 6) does not change the file:
+`usage`, one per turn (FR-HIS-02), in antai's own field names so a rename of the SDK's usage fields does not change the file:
 
 | Field | Type | Meaning |
 |---|---|---|
 | `provider`, `model`, `steps` | string, string, integer | What served the turn |
 | `input`, `output`, `reasoning`, `cacheRead`, `cacheWrite`, `total` | integer or null | From the SDK usage (`inputTokens`, `outputTokenDetails.reasoningTokens`, `inputTokenDetails.cacheReadTokens`, …), summed over the turn |
 | `sessionTotal` | integer | Running total, so the index can be rebuilt from the file's tail |
-| `rateLimit` | object, optional | Last provider rate-limit snapshot, for example Groq's remaining requests and tokens with reset times as absolute timestamps (research E 5.5) |
+| `rateLimit` | object, optional | Last provider rate-limit snapshot, for example Groq's remaining requests and tokens with reset times as absolute timestamps |
 
 `title`: `title` (redacted, at most 80 characters) and `source` (`model`, `prompt` fallback, or `fork`) (D30). With `--no-history` no title call is made, because nothing stores it.
 
@@ -749,13 +756,13 @@ One file per UTC day, shared by every antai process. Each record is a self-conta
 
 | Audit-only `kind` | Written when | Fields |
 |---|---|---|
-| `session-start` | A session starts (the session file is lazy, so this is the only record of a session that never got a prompt) | `sessionKind`, `cwd`, `gitRoot`, `projectKey`, `mode`, `model`, `profile`, `historyEnabled`, `antaiVersion` |
+| `session-start` | A session starts (the session file is lazy, so this is the only record of a session that never got a prompt) | `sessionKind`, `cwd`, `gitRoot`, `projectKey`, `mode`, `model`, `profile`, `historyEnabled`, `antaiVersion`, `rulesVersion` (safety rule-set version, deliverable 02, section 4.2) |
 | `config-file` | `antai mcp add`, `antai mcp remove`, `antai init` | `action`, `file`, `server` |
 | `history-delete` | `/history delete` | `deletedSessionId` |
 | `retention` | A sweep deleted something | `sessionsDeleted`, `auditFilesDeleted`, `logsDeleted` |
 
 ```jsonl
-{"v":1,"ts":"2026-10-12T14:32:04.119Z","sessionId":"2026-10-12_1432_a1b2c3","seq":null,"kind":"session-start","sessionKind":"interactive","cwd":"/Users/me/shop-api","gitRoot":"/Users/me/shop-api","projectKey":"/users/me/shop-api","mode":"manual","model":"groq:openai/gpt-oss-120b","profile":null,"historyEnabled":true,"antaiVersion":"1.0.0"}
+{"v":1,"ts":"2026-10-12T14:32:04.119Z","sessionId":"2026-10-12_1432_a1b2c3","seq":null,"kind":"session-start","sessionKind":"interactive","cwd":"/Users/me/shop-api","gitRoot":"/Users/me/shop-api","projectKey":"/users/me/shop-api","mode":"manual","model":"groq:openai/gpt-oss-120b","profile":null,"historyEnabled":true,"antaiVersion":"1.0.0","rulesVersion":"1.0.0"}
 {"v":1,"ts":"2026-10-12T14:32:11.950Z","sessionId":"2026-10-12_1432_a1b2c3","seq":3,"kind":"approval","turn":1,"toolCallId":"call_1","tool":"edit_file","input":"src/auth/token.ts","tier":"normal","rule":"file-write","mode":"manual","dialogs":1,"decision":"approved","by":"user"}
 {"v":1,"ts":"2026-10-12T14:40:02.600Z","sessionId":null,"seq":null,"kind":"credential","action":"oauth-login","server":"linear","issuer":"https://auth.example.com","via":"cli"}
 {"v":1,"ts":"2026-10-13T08:00:03.004Z","sessionId":null,"seq":null,"kind":"retention","sessionsDeleted":3,"auditFilesDeleted":1,"logsDeleted":4}
@@ -765,7 +772,7 @@ The audit log holds commands, paths, decisions and settings, but no prompts, mod
 
 ### 5.14 `mcp-fingerprints.json`
 
-Answers Q01-13: baselines live in their own file, not in `mcp.json`, because `mcp.json` is user-written and may be shared, while baselines are machine state.
+Baselines live in their own file, not in `mcp.json`, because `mcp.json` is user-written and may be shared, while baselines are machine state.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -774,8 +781,8 @@ Answers Q01-13: baselines live in their own file, not in `mcp.json`, because `mc
 | `….name`, `….transport`, `….protocolVersion` | strings | Last seen name, transport and negotiated MCP version |
 | `….baseline` | object | Accepted state: `acceptedAt`, `sdkVersion`, and `tools.<name>` = `{ fingerprint, annotationsHash, definition }` |
 | `….lastSeen` | object or null | Same shape, present only while it differs from the baseline; `/mcp` shows the difference |
-| `fingerprint` | string | Value from `fingerprintTools` (from `ai`, since 7.0.19), which digests description, input schema and title (research B 7). Stored as given |
-| `annotationsHash` | string | `sha256:` of the canonical JSON of the tool's annotations, which the SDK fingerprint ignores (A-S11) |
+| `fingerprint` | string | Value from `fingerprintTools` (from `ai`, since 7.0.19), which digests description, input schema and title. Stored as given |
+| `annotationsHash` | string | `sha256:` of the canonical JSON of the tool's annotations, which the SDK fingerprint ignores |
 | `definition` | object | `title`, `description`, `inputSchema`, `annotations`, kept so `/mcp` can show what changed and so fingerprints can be recomputed after an SDK upgrade. Capped at 256 KB per server; beyond that only hashes are kept |
 
 ```json
@@ -803,7 +810,7 @@ Answers Q01-13: baselines live in their own file, not in `mcp.json`, because `mc
 }
 ```
 
-The first connect records a baseline. On drift, `MCPM` writes `lastSeen`, emits an `mcp-drift` event and keeps the tools available (D29); the baseline is replaced only when the user accepts the change in `/mcp` (deliverable 10), so the warning repeats until then. A tool whose `annotationsHash` changed loses the Safe treatment from `trustReadOnlyHints` until accepted (Q01-16 default).
+The first connect records a baseline. On drift, `MCPM` writes `lastSeen`, emits an `mcp-drift` event and keeps the tools available (D29); the baseline is replaced only when the user accepts the change in `/mcp` (deliverable 10), so the warning repeats until then. A tool whose `fingerprint` or `annotationsHash` changed loses Safe, whether from `trustReadOnlyHints` or `mcp.tools.allow`, until accepted; it stays available at Normal (FR-MCP-06).
 
 ### 5.15 Debug log and crash reports
 
@@ -817,7 +824,7 @@ Debug log line (`logs/debug-<session-id>.jsonl`; subcommands use `debug-cli-<YYY
 |---|---|
 | `v`, `ts`, `sessionId` | As in the audit log |
 | `level` | `debug`, `info`, `warn`, `error` |
-| `cat` | `provider`, `mcp`, `oauth`, `tool`, `history`, `config`, `ui` (filterable, deliverable 15) |
+| `cat` | `provider`, `mcp`, `oauth`, `tool`, `history`, `config`, `ui`, `session`, `safety`, `process`, `perf` (filterable; deliverable 15, OBS-D4) |
 | `msg`, `data` | Short message and allow-listed structured data, redacted |
 
 Crash report (`logs/crash-<YYYYMMDDTHHMMSSZ>-<pid>.json`, FR-ERR-04), written synchronously because the process is failing:
@@ -826,7 +833,7 @@ Crash report (`logs/crash-<YYYYMMDDTHHMMSSZ>-<pid>.json`, FR-ERR-04), written sy
 {"v":1,"ts":"2026-10-12T15:10:44.512Z","antaiVersion":"1.0.0","node":"24.11.0","os":"darwin","arch":"arm64","sessionId":"2026-10-12_1432_a1b2c3","phase":"turn","error":{"name":"TypeError","message":"Cannot read properties of undefined (reading 'toolCallId')","stack":"TypeError: …\n    at mapPart (dist/cli.js:…)"}}
 ```
 
-No conversation text, no environment variables, no config values. Message and stack pass `RED`, because error messages can echo keys.
+No conversation text, no environment variables, no config values. Message and stack pass `RED`, because error messages can echo keys. Deliverable 15, section 6.2 adds diagnostic fields (`osRelease`, `renderer`, `uptimeMs`, `origin`, `memory`, `breadcrumbs`, `debugLog`) under the same rules.
 
 ### 5.16 Profiles, skills and instruction files
 
@@ -842,7 +849,7 @@ antai never writes these, except `antai init` creating a starter `AGENT.md`. For
 |---|---|---|
 | Append | F10 sessions, F14 audit, F15 debug log | Whole lines only; earlier lines never change |
 | Atomic replace under a lock | F03 and W3 MCP files (CLI edits), F04 credentials, F05 trust, F06 fingerprints, F12 index | Readers see the old or the new file; concurrent writers are serialised |
-| Write once | F16 crash reports, F11 and F17 locks, W1 `antai init`, new session files | Created with `wx` (`O_CREAT | O_EXCL`), so an existing file is never overwritten |
+| Write once | F16 crash reports, F20 doctor bundles, F11 and F17 locks, W1 `antai init`, new session files | Created with `wx` (`O_CREAT \| O_EXCL`), so an existing file is never overwritten |
 | Rename | Quarantine, corrupt copies | Atomic on one volume |
 
 ### 6.2 Atomic replace and Windows retries
@@ -850,27 +857,26 @@ antai never writes these, except `antai init` creating a starter `AGENT.md`. For
 `FSX.writeAtomic(path, data, { fsync, mode })`:
 
 1. Write `<name>.tmp-…` in the **same folder** (never `os.tmpdir()`), created with the final mode, so a credentials temp file is never readable by others even briefly.
-2. `fsync` the temp file for F03, F04, F05, F06 and W3. Not for `index.json`: it is a rebuildable cache, and on macOS `fsync` maps to the slow `F_FULLFSYNC` (research F 2.2).
+2. `fsync` the temp file for F03, F04, F05, F06 and W3. Not for `index.json`: it is a rebuildable cache, and on macOS `fsync` maps to the slow `F_FULLFSYNC`.
 3. Rename over the target. On POSIX, `fsync` the folder afterwards for F04 and F05 so the rename itself survives a power cut. Windows cannot open a folder for `fsync`; the step is skipped there.
-4. On Windows, the rename is `MoveFileExW(…, MOVEFILE_REPLACE_EXISTING)`, which fails with EPERM, EBUSY or EACCES while another process (antivirus, indexer, editor) holds the target without delete sharing (research F 2.1). It is retried.
+4. On Windows, the rename is `MoveFileExW(…, MOVEFILE_REPLACE_EXISTING)`, which fails with EPERM, EBUSY or EACCES while another process (antivirus, indexer, editor) holds the target without delete sharing. It is retried.
 
-| Implementation (research F 2.1) | Retries on | Budget |
+| Implementation | Retries on | Budget |
 |---|---|---|
 | `write-file-atomic` 8.0.0 | none | — |
 | `graceful-fs` 4.2.11 | EACCES, EPERM, EBUSY, but only when the target does **not** exist, so not for a replace | 60 s |
 | `atomically` 2.1.1 | EMFILE, ENFILE, EAGAIN, EBUSY, EACCES, EPERM | 7,500 ms async |
-| VS Code `pfs.rename` | EACCES, EPERM, EBUSY | 60 s, 10 ms steps to 100 ms |
-| Gemini CLI | EBUSY, EPERM, EACCES | 5 attempts, 50·2ⁿ ms |
+| antai's own loop (fallback, with `write-file-atomic`) | EPERM, EBUSY, EACCES | 5 s, 50 ms doubling to 800 ms |
 
-antai uses `atomically` 2.1.1 (deliverable 01, section 7), so a replace retries for up to **7.5 s**. If P1 shows that `atomically` cannot create the temp file with the requested mode (Q04-13), `FSX` uses `write-file-atomic` 8.0.0 and its own loop: EPERM, EBUSY and EACCES, 50 ms doubling to 800 ms, 5 s budget. When the budget is spent, the temp file is deleted, the old file stays, and the caller decides (section 6.10). antai never sets the Windows hidden attribute on its files, because opening an existing hidden file with `'w'` fails with EPERM (research F 2.1).
+antai uses `atomically` 2.1.1 (deliverable 01, section 7), so a replace retries for up to **7.5 s**. If phase P1 shows that `atomically` cannot create the temp file with the requested mode, `FSX` uses `write-file-atomic` 8.0.0 and its own loop: EPERM, EBUSY and EACCES, 50 ms doubling to 800 ms, 5 s budget. When the budget is spent, the temp file is deleted, the old file stays, and the caller decides (section 6.10). antai never sets the Windows hidden attribute on its files, because opening an existing hidden file with `'w'` fails with EPERM.
 
 ### 6.3 JSONL append and tolerant read
 
-**Append.** `HS` opens the session file once with flag `'a'` (`O_APPEND`; `FILE_APPEND_DATA` on Windows) and writes each record as one `fs.write` of `JSON.stringify(record) + '\n'`. A short write is treated as a failure (section 6.10). There is no `fsync` per record: a process crash or `SIGKILL` cannot lose bytes that `write()` accepted, which is what AC-17 tests; an operating-system crash or power cut can lose the last seconds, as in Codex and Gemini CLI, neither of which syncs per record (research E, verdict 2). The file is synced once when the session closes.
+**Append.** `HS` opens the session file once with flag `'a'` (`O_APPEND`; `FILE_APPEND_DATA` on Windows) and writes each record as one `fs.write` of `JSON.stringify(record) + '\n'`. A short write is treated as a failure (section 6.10). There is no `fsync` per record: a process crash or `SIGKILL` cannot lose bytes that `write()` accepted, which is what AC-17 tests; an operating-system crash or power cut can lose the last seconds. That is accepted: a sync per record would slow every write, most of all on macOS (DS-D28). The file is synced once when the session closes.
 
 **Newline repair.** Before the first append to an existing file (resume), `HS` reads its last byte. If it is not `\n`, the last line was torn by a crash; `HS` appends `\n` so the fragment becomes its own (unparseable) line, then appends a `recovery` event. The fragment is never truncated away: files are never rewritten.
 
-**Audit appends** follow the same rule with one difference: the day file is shared by all processes. Each record is a single `O_APPEND` write of at most 8 KB, with no lock. POSIX guarantees that no other file modification comes between positioning at the end and the write (research F 2.2), and on local file systems a single small append is not interleaved in practice. CI checks this on all three operating systems with two processes writing 1,000 records each (Q04-8). A lock per audit write was rejected: a stale lock would block the one log that must never be skipped.
+**Audit appends** follow the same rule with one difference: the day file is shared by all processes. Each record is a single `O_APPEND` write of at most 8 KB, with no lock. POSIX guarantees that no other file modification comes between positioning at the end and the write, and on local file systems a single small append is not interleaved in practice. CI checks this on all three operating systems with two processes writing 1,000 records each. A lock per audit write was rejected: a stale lock would block the one log that must never be skipped.
 
 **Read.** Line by line through a stream, never the whole file at once:
 
@@ -881,7 +887,7 @@ antai uses `atomically` 2.1.1 (deliverable 01, section 7), so a replace retries 
 | A line longer than 4 MiB | Skipped as corrupt, so a damaged file cannot exhaust memory |
 | Unknown `type`, `kind` or field | Ignored (forward compatibility) |
 | First line is not a readable `session` header | The file is moved to `sessions/quarantine/` and reported with its path |
-| A `tool-result` whose call is missing | Dropped from the model copy (research E 1.1, `remove_orphan_outputs`) |
+| A `tool-result` whose call is missing | Dropped from the model copy, so the provider never gets a result without its call |
 
 ### 6.4 Locks
 
@@ -893,9 +899,9 @@ One helper in `FSX` serves every lock. A lock is a file created with `wx`, holdi
 | `index.json.lock`, `credentials.json.lock`, `trusted.json.lock`, `mcp-fingerprints.json.lock`, `mcp.json.lock` | One read-modify-write (milliseconds) | Retry every 50 ms for up to 2 s | Pid dead on the same host, or older than 10 s, or (another host) older than 60 s |
 | `retention.lock` | One sweep | None: another process is sweeping | As short locks |
 
-A stale lock is renamed aside (only one process can win that rename), deleted, and the `wx` create is retried. A pid reused by an unrelated program makes a dead session look alive, so resume forks instead of resuming in place: the safe direction. A lock from another host is never judged stale for a session; antai prints the holder and the lock path. `O_EXCL` is unreliable on old NFS, so a home folder on a network share is not supported for concurrent processes (documented). Pid liveness on Windows is unverified (Q04-7).
+A stale lock is renamed aside (only one process can win that rename), deleted, and the `wx` create is retried. A pid reused by an unrelated program makes a dead session look alive, so resume forks instead of resuming in place: the safe direction. A lock from another host is never judged stale for a session; antai prints the holder and the lock path. `O_EXCL` is unreliable on old NFS, so a home folder on a network share is not supported for concurrent processes (documented). Pid liveness on Windows is to be confirmed in the P0 spike.
 
-Why not `proper-lockfile` (deliverable 01 lists it, with this fallback): it keeps a lock alive by touching its time stamp every few seconds and calls a lock stale after 10 s without a touch (research F 2.3). A laptop that sleeps with a session open would lose its session lock to another process, and two processes would then append to one file. A pid check fails the other way, which is safe here.
+Why not `proper-lockfile` (deliverable 01 lists it, with this fallback): it keeps a lock alive by touching its time stamp every few seconds and calls a lock stale after 10 s without a touch. A laptop that sleeps with a session open would lose its session lock to another process, and two processes would then append to one file. A pid check fails the other way, which is safe here.
 
 ### 6.5 DS-5 Updating a shared file
 
@@ -934,14 +940,14 @@ flowchart TB
 | A tool returns | `command`, `file-write` or `mcp-call` event | Audit first, then session | FR-HIS-13 |
 | Turn ends | Response messages of the last stream call, `usage`; then the index entry | — | FR-HIS-02, 08 |
 | After the first turn | `title`; index entry | — | D30 |
-| Esc | `partial` assistant message, `synthetic` results, `interrupted` event | At the abort | FR-AGT-04 |
+| Esc | Response messages of the steps already completed in the current stream call (deliverable 03, SD-D4), `partial` assistant message, `synthetic` results, `interrupted` event | At the abort | FR-AGT-04 |
 | `/compact` | `compaction` message and event | — | FR-AGT-06 |
 | Resume | `recovery`, `synthetic` results, `repair`, `resume` | Before the first new prompt | FR-HIS-02, 04 |
-| End (`/exit`, `/clear`, end of `run`, SIGTERM, SIGHUP) | `end` event; `fsync`, close, delete the lock; index entry | Within `LIFE`'s shutdown order (deliverable 01, section 5.9) | FR-HIS-06 |
+| End (`/exit`, `/clear`, `/resume`, end of `run`, SIGTERM, SIGHUP) | `end` event; `fsync`, close, delete the lock; index entry | Within `LIFE`'s shutdown order (deliverable 01, section 5.9) | FR-HIS-06 |
 
 **Audit first.** The audit log is the record that must survive (FR-HIS-13), so `AUD` writes before `HS`. A crash between the two leaves the decision in the audit log only. `HS` assigns the `seq` before either write, so both carry the same number.
 
-**What the in-memory conversation is.** `SC` sends the model the stored, redacted records, not the SDK's raw objects: the user message as soon as it is written, and the response messages from the next turn on. A live session and a resumed one therefore send identical messages, and a secret the user pastes into a prompt reaches neither the model nor the disk (G2). Inside one turn, the approval continuation uses the SDK's own messages, because the per-process approval signature (A-S8) may cover them (unverified which fields it covers).
+**What the in-memory conversation is.** `SC` sends the model the stored, redacted records, not the SDK's raw objects: the user message as soon as it is written, and the response messages from the next turn on. A live session and a resumed one therefore send identical messages, and a secret the user pastes into a prompt reaches neither the model nor the disk (G2). Inside one turn, the approval continuation uses the SDK's own messages, because the per-process approval signature may cover them (which fields it covers is to be confirmed in the P0 spike).
 
 ### 6.7 Second writer and two processes in one workspace
 
@@ -986,7 +992,7 @@ flowchart TB
     class ACT orch
 ```
 
-A pending `tool-approval-request` without a response is closed the same way (deliverable 01, HLD-D23): the per-process approval secret of the old process is gone, so it cannot be answered anyway. The synthetic result tells the model that the outcome was not recorded and that it must check before running the action again (wording in deliverable 08, after Claude Code's precedent, research E 1.6). After a crash, antai also shows the user the `command` and `file-write` events of the interrupted turn, because the model never saw their results.
+A pending `tool-approval-request` without a response is closed the same way (deliverable 01, HLD-D23): the per-process approval secret of the old process is gone, so it cannot be answered anyway. The synthetic result tells the model that the outcome was not recorded and that it must check before running the action again (wording in deliverable 08). After a crash, antai also shows the user the `command` and `file-write` events of the interrupted turn, because the model never saw their results.
 
 ### 6.9 DS-3 Crash points
 
@@ -1018,7 +1024,7 @@ flowchart LR
 |---|---|---|
 | C1 while text streams (AC-17) | Header, user message and earlier turns. The partial answer is lost (FR-HIS-02) | Nothing to repair; the user message stands without an answer, and the next prompt follows it |
 | C2 while a dialog is open (AC-17) | Everything up to W2, including the tool call and its approval request | Synthetic result for the pending call (`repair`, `approval-pending`) |
-| C3 while a tool runs (AC-17) | W3: the approval in audit and session, the approval response | Synthetic interrupted result; the user is shown the events of that turn. For a Safe or automatic call there is no W2 before the tool runs (the step ends after it), so the call itself is lost from the conversation while its `command` event survives (P2 in section 13 closes this) |
+| C3 while a tool runs (AC-17) | W3: the approval in audit and session, the approval response | Synthetic interrupted result; the user is shown the events of that turn. For a Safe or automatic call there is no W2 before the tool runs (the step ends after it), so the call itself is lost from the conversation while its `command` event survives (P2 in section 13, not used in v1, would close this) |
 | C4 between tool return and turn end | Events of executed tools; messages up to the last W2 | As C3 |
 | C5 during the index update | The complete session file. The temp file may remain | Reconciliation adds the entry; `RET` deletes the stale temp after 1 hour |
 | During `credentials.json` or `trusted.json` replace | The old file (the rename did not happen) or the new one | Nothing; a lost refresh means a new refresh or login |
@@ -1031,8 +1037,8 @@ flowchart LR
 
 | Operation | ENOSPC, EDQUOT, EACCES or EPERM | Why |
 |---|---|---|
-| Session append | History stops for this session with one notice naming the folder and the next step ("free disk space; this conversation is no longer saved"). The conversation continues | Precedent: Gemini CLI turns recording off on ENOSPC and continues (research E 1.2) |
-| Audit append | Retried 3 times, 50 ms apart. Then the audit writer is marked failed: `POL` denies every call that would need an audit record (shell commands, writes, MCP calls) with the reason "audit log cannot be written". Each later call first retries the pending audit write; when one succeeds, the block lifts. Safe file reads still run (pending BRD review, P7) | The audit log is "always kept" (FR-HIS-13, D26); an action that cannot be audited does not run |
+| Session append | History stops for this session with one notice naming the folder and the next step ("free disk space; this conversation is no longer saved"). The conversation continues | Losing the saved copy is better than stopping the user's work; the notice says so once |
+| Audit append | Retried 3 times, 50 ms apart. Then the audit writer is marked failed: `POL` denies every call that would need an audit record (shell commands, writes, MCP calls) with the reason "audit log cannot be written". Each later call first retries the pending audit write; when one succeeds, the block lifts. Safe file reads still run (beyond the BRD, P7) | The audit log is "always kept" (FR-HIS-13, D26); an action that cannot be audited does not run |
 | Index update | Skipped; reconciled later | Cache |
 | Credentials write | The key or token works for this session only; error with the path | NFR-USE-02 |
 | `trusted.json` write | The answer applies to this session only; notice | — |
@@ -1062,16 +1068,16 @@ flowchart LR
 
 | Item | Where it lives instead | Reference |
 |---|---|---|
-| Instructions and system prompt, environment summary | Rebuilt every turn by `IB` | A-C6, FR-AGT-03 |
+| Instructions and system prompt, environment summary | Rebuilt every turn by `IB` | FR-AGT-03 |
 | Raw (unredacted or uncapped) tool output | Nowhere; the stream is redacted, then capped | FR-HIS-07, FR-SH-08 |
 | Secret values outside `credentials.json` | Memory only (`RED`'s known-value set) | FR-SEC-03, 05 |
 | `.env` file contents | Read for values, kept in memory | FR-SEC-01 |
 | The `sudo` password | Typed into `sudo -v` on the real terminal; antai never sees it. The command's own output is captured and redacted like any other | FR-SH-09 |
-| OAuth authorization codes, PKCE verifiers, `state` values | Memory of the login attempt; discarded after the exchange | FR-MCP-11, research F 1.1 |
-| The approval signing secret | Memory of the process | A-S8 |
+| OAuth authorization codes, PKCE verifiers, `state` values | Memory of the login attempt; discarded after the exchange | FR-MCP-11 |
+| The approval signing secret | Memory of the process | Deliverable 02, section 3.10 |
 | Substituted `${VAR}` values | Memory; files keep the reference | FR-MCP-03 |
 | Prompts in the debug log | Not recorded unless asked | Deliverable 15 |
-| Prompt history across sessions | Up and down arrows browse the current session's prompts only (Q04-10) | FR-UI-05 |
+| Prompt history across sessions | Up and down arrows browse the current session's prompts only | FR-UI-05 |
 | Streamed partial deltas | Only final messages, plus a `partial` message on Esc | FR-AGT-04 |
 
 ### 7.3 How it is tested
@@ -1095,13 +1101,13 @@ flowchart LR
 |---|---|---|---|
 | Sessions and their index entries | 30 days | `lastActivityAt` **and** file modification time both older than the cutoff | `history.retentionDays`; `0` keeps forever (FR-HIS-09) |
 | Audit day files | 90 days | Date in the file name | `audit.retentionDays`; `0` keeps forever (P9) |
-| Debug logs and crash reports | 7 days | Modification time | Fixed (FR-ERR-03) |
+| Debug logs, crash reports and doctor bundles (F20) | 7 days | Modification time | Fixed (FR-ERR-03) |
 | Quarantined sessions | As sessions | Modification time | `history.retentionDays` |
 | `*.corrupt-*` copies | 30 days | Modification time | Fixed |
 | Stale temp files, stale locks | 1 hour; pid dead | Modification time; holder | Fixed |
 | Credentials, trust entries, fingerprint baselines | Kept | — | Removed by logout, `/trust`, `antai mcp remove` |
 
-Valid retention values are integers ≥ 0; a non-zero value below 1 is invalid (Gemini CLI's 1-day minimum, research E 1.2). Retention keys are read from global config only (pending BRD review, P3): the sweep deletes data of every project, and a cloned repository must not be able to set `history.retentionDays: 1` and wipe the user's history, or shorten the audit trail.
+Valid retention values are integers ≥ 0; a non-zero value below 1 is invalid. Retention keys are read from global config only (FR-CFG-01): the sweep deletes data of every project, and a cloned repository must not be able to set `history.retentionDays: 1` and wipe the user's history, or shorten the audit trail.
 
 ### 8.2 DS-7 Retention sweep
 
@@ -1129,7 +1135,7 @@ flowchart TB
     class SK,SK2 safety
 ```
 
-Fail-safe rules (research E, recommendation 5): an unreadable or invalid config skips the whole sweep (Claude Code pauses its sweep the same way); a session held by a live process is never deleted (FR-HIS-09); the double time check keeps a session whose index entry is stale. The sweep trusts the system clock; a clock set years ahead would expire everything, which is accepted and documented.
+Fail-safe rules: an unreadable or invalid config skips the whole sweep, because a wrong cutoff could delete data that cannot be recovered; a session held by a live process is never deleted (FR-HIS-09); the double time check keeps a session whose index entry is stale. The sweep trusts the system clock; a clock set years ahead would expire everything, which is accepted and documented.
 
 ### 8.3 User actions on stored data
 
@@ -1148,7 +1154,7 @@ Fail-safe rules (research E, recommendation 5): an unreadable or invalid config 
 
 | Requirement | How storage meets it |
 |---|---|
-| NFR-PRIV-01 (data only to provider, MCP servers, OAuth servers) | No storage component opens a network connection. Nothing is synced or uploaded; there is no telemetry file. A doctor bundle, if added later, is written locally only (research E 5.5) |
+| NFR-PRIV-01 (data only to provider, MCP servers, OAuth servers) | No storage component opens a network connection. Nothing is synced or uploaded; there is no telemetry file. The doctor bundle (F20, deliverable 15) is written locally only |
 | NFR-PRIV-02 (everything under `~/.antai`; project settings in the project) | Section 2. No temp files elsewhere, no caches in the workspace, no XDG or registry entries. Checked by the file-location test |
 | NFR-PRIV-03 (provider terms) | Not a storage concern. Local history holds the same text the provider received, and is kept for 30 days by default |
 | FR-HIS-07, NFR-SEC-05 (no secrets in history) | Section 7 |
@@ -1169,7 +1175,7 @@ stateDiagram-v2
         Idle --> InTurn : prompt
         InTurn --> Idle : turn end, or Esc marked interrupted
     }
-    Active --> Closed : exit, clear, run done, end event
+    Active --> Closed : exit, clear, /resume, run done, end event
     Active --> Interrupted : crash or kill, no end event
     Closed --> Active : resume, lock taken
     Interrupted --> Active : resume, repair records
@@ -1245,13 +1251,13 @@ Additive changes (a new optional field, a new event `kind`, a new record `type`)
 | Item | macOS and Linux | Windows |
 |---|---|---|
 | `~/.antai` and `sessions/`, `audit/`, `logs/` | `0700`, set at creation | Inherits the `%USERPROFILE%` ACL, which by default grants the user, SYSTEM and Administrators only |
-| Files antai creates under `~/.antai` | `0600`, set when the file is created (temp files too) | Inherit the folder ACL. `fs.chmod` and `mode` change only the read-only bit on Windows (research F 2.4) |
+| Files antai creates under `~/.antai` | `0600`, set when the file is created (temp files too) | Inherit the folder ACL. `fs.chmod` and `mode` change only the read-only bit on Windows |
 | Existing `~/.antai` or `credentials.json` with group or other bits | Reset to `0700` / `0600` with a notice | — |
 | `credentials.json` owned by another user | Ignored with a warning (for example after `sudo antai`) | — |
-| Mitigation for `0600` on Windows | — | When `~/.antai` is first created, `FSX` runs `%SystemRoot%\System32\icacls.exe` (absolute path, no shell, through `PSV`) to remove inherited entries and grant the current user full control (`/inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"`). Best effort: on failure, one notice and the profile ACL remains. The switch spelling and side effects on backup tools are unverified (Q04-6) |
+| Mitigation for `0600` on Windows | — | When `~/.antai` is first created, `FSX` runs `%SystemRoot%\System32\icacls.exe` (absolute path, no shell, through `PSV`) to remove inherited entries and grant the current user full control (`/inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"`). Best effort: on failure, one notice and the profile ACL remains. The switch spelling and side effects on backup tools are to be confirmed in the P0 spike |
 | Workspace files antai writes (`AGENT.md`, `.antai/mcp.json`) | Umask defaults: they are meant to be committed | Defaults |
 
-Why not encrypt `credentials.json` on Windows: a key derived from host and user names (Gemini CLI's file fallback) only obscures the file, and DPAPI needs native code or a PowerShell call per read, which breaks the 1-second start target (NFR-PERF-01) and NFR-COMP-04. The OS keychain arrives in v1.1 (D20). AC-01's "readable only by the current user" is checked on Windows by reading the ACL with `icacls` in the test.
+Why not encrypt `credentials.json` on Windows: a key derived from host and user names only obscures the file, and DPAPI needs native code or a PowerShell call per read, which breaks the 1-second start target (NFR-PERF-01) and NFR-COMP-04. The OS keychain arrives in v1.1 (D20). AC-01's "readable only by the current user" is checked on Windows by reading the ACL with `icacls` in the test.
 
 ---
 
@@ -1292,20 +1298,20 @@ Start-up reads only `config.json` files, MCP files, `trusted.json` and `credenti
 
 ---
 
-## 13. Proposals pending BRD review
+## 13. Additions beyond BRD v0.4
 
-The BRD design stays the baseline wherever it is specified. These items are proposals for the BRD review (DLV-PLN-01).
+These go beyond BRD v0.4. The design uses them as stated; the BRD can adopt them later. P1 and P2 are recorded alternatives: v1 keeps the baseline shown in their rows.
 
-| # | Proposal | BRD baseline | Reason | Ref |
+| # | Addition | BRD baseline | Reason | Ref |
 |---|---|---|---|---|
-| P1 | Replace `index.json` with an append-only `sessions/index.jsonl`: one line per entry update, last line per ID wins, compacted by an atomic rewrite under `index.jsonl.lock` at start-up. Keep reconciliation and rebuild | `index.json` rewritten under a lock (FR-HIS-08, BRD 8.2). **Kept for v1** (answers Q01-23) | No read-modify-write of a shared file at every turn end and no Windows rename on that path; precedent Codex `session_index.jsonl` (research E 1.1). The baseline already meets AC-18 with its lock and reconciliation, so the change is an optimisation, not a fix | FR-HIS-08, Q04-1 |
-| P2 | Append each step's response messages when the step ends (`onStepEnd`), not only at the end of each stream call | Response messages at turn end (FR-HIS-02); this design adds the write before each dialog that AC-17 needs | A Safe or automatic tool that ran before a crash leaves its call and result in the conversation, so the model knows what happened (crash point C3) | FR-HIS-02, AC-17, Q04-2 |
-| P3 | `history.retentionDays` and `audit.retentionDays` only from global config, flags or environment | Any layer (FR-CFG-01 lists no rule) | The sweep deletes all projects' data; a cloned repository must not shorten it | FR-CFG-01, FR-HIS-09, 13, Q04-3 |
-| P4 | Secret-path entry `~/.antai/credentials.json*` (a glob) instead of the exact file | Exact file (FR-SEC-01) | Temp files during a replace and `.corrupt-…` copies hold the same secrets and would otherwise be readable by a Normal-tier `cat` | FR-SEC-01, FR-TOOL-09, Q04-4 |
-| P5 | Reads of `~/.antai/sessions`, `audit` and `logs` by tools are at least Normal, even when the workspace is the home folder | Safe inside the workspace (D25) | In a home-folder workspace the model could read every project's history without asking | FR-TOOL-09, Q04-5 |
-| P6 | `shell.gitBashPath` and `workspace.extraReadPaths` from global config only; `mcp.tools.allow` only from trusted projects | Not in the trust-gated list (FR-CFG-04) | Each loosens safety from an untrusted repository: choosing the program that runs every command, opening reads outside the workspace, or making global MCP tools run without asking | FR-CFG-04, FR-SH-11, FR-TOOL-09, FR-MCP-06 |
-| P7 | When the audit log cannot be written, deny calls that need an audit record | Not specified | "Always kept" (D26) should mean no unaudited action | FR-HIS-13, G2, Q04-9 |
-| P8 | Disambiguate `models`: string values are aliases, object values are per-model metadata (or rename the latter) | One key used for both (5.8 example and FR-AGT-05) | The schema needs one meaning per key | FR-MOD-03, FR-AGT-05, Q04-11 |
+| P1 | Alternative, not used in v1: replace `index.json` with an append-only `sessions/index.jsonl`: one line per entry update, last line per ID wins, compacted by an atomic rewrite under `index.jsonl.lock` at start-up. Keep reconciliation and rebuild | `index.json` rewritten under a lock (FR-HIS-08, BRD 8.2). **Kept for v1** | No read-modify-write of a shared file at every turn end and no Windows rename on that path. The baseline already meets AC-18 with its lock and reconciliation, so the change is an optimisation, not a fix | FR-HIS-08 |
+| P2 | Alternative, not used in v1: append each step's response messages when the step ends (`onStepEnd`), not only at the end of each stream call | Response messages at turn end (FR-HIS-02); this design adds the write before each dialog that AC-17 needs | A Safe or automatic tool that ran before a crash leaves its call and result in the conversation, so the model knows what happened (crash point C3) | FR-HIS-02, AC-17 |
+| P3 | `history.retentionDays` and `audit.retentionDays` only from global config, flags or environment | Now in BRD v0.4: FR-CFG-01 never reads them from project config | The sweep deletes all projects' data; a cloned repository must not shorten it | FR-CFG-01, FR-HIS-09, 13 |
+| P4 | Secret-path entry `~/.antai/credentials.json*` (a glob) instead of the exact file | Exact file (FR-SEC-01) | Temp files during a replace and `.corrupt-…` copies hold the same secrets and would otherwise be readable by a Normal-tier `cat` | FR-SEC-01, FR-TOOL-09 |
+| P5 | Reads of `~/.antai/sessions`, `audit` and `logs` by tools are at least Normal, even when the workspace is the home folder | Safe inside the workspace (D25) | In a home-folder workspace the model could read every project's history without asking | FR-TOOL-09 |
+| P6 | `shell.gitBashPath` and `workspace.extraReadPaths` from global config only; `mcp.tools.allow` only from trusted projects | Now in BRD v0.4: FR-CFG-01 (global only), FR-CFG-04 and FR-MCP-06 (`mcp.tools.allow` needs trust) | Each loosens safety from an untrusted repository: choosing the program that runs every command, opening reads outside the workspace, or making global MCP tools run without asking | FR-CFG-04, FR-SH-11, FR-TOOL-09, FR-MCP-06 |
+| P7 | When the audit log cannot be written, deny calls that need an audit record | Not specified | "Always kept" (D26) should mean no unaudited action | FR-HIS-13, G2 |
+| P8 | `models` is read by value type: string values are aliases, object values are per-model metadata | One key used for both (5.8 example and FR-AGT-05) | The schema needs one meaning per key | FR-MOD-03, FR-AGT-05 |
 | P9 | `audit.retentionDays: 0` keeps forever, as for history; non-zero values at least 1 | Not stated for the audit log | Consistent rules | FR-HIS-13 |
 
 ---
@@ -1314,19 +1320,19 @@ The BRD design stays the baseline wherever it is specified. These items are prop
 
 | ID | Decision | Reason | Alternative rejected |
 |---|---|---|---|
-| DS-D1 | Local JSON and JSONL files; no database | No native module (NFR-COMP-04), readable, matches D7 and the file-based agents (section 1.4) | SQLite (`better-sqlite3`, `node:sqlite`) as OpenCode 2.x and Goose |
+| DS-D1 | Local JSON and JSONL files; no database | No native module (NFR-COMP-04), readable, matches D7 (section 1.4) | SQLite (`better-sqlite3`, `node:sqlite`) |
 | DS-D2 | Session ID `YYYY-MM-DD_HHMM_<6 hex>` in UTC, lowercase, file `<id>.jsonl`, created with `wx` and retried on a clash | Matches the BRD example; sortable; no DST jumps; safe on case-insensitive volumes | UUIDs; local time |
-| DS-D3 | Create the session file at the first user message | No empty sessions from launches without a prompt (Codex defers creation too) | Create at start |
-| DS-D4 | Every session record has `type`, `seq`, `ts`; `formatVersion` only in the header | `seq` links audit and session records and exposes gaps; one version per file is enough | A version on every line (research E) |
+| DS-D3 | Create the session file at the first user message | No empty sessions from launches without a prompt | Create at start |
+| DS-D4 | Every session record has `type`, `seq`, `ts`; `formatVersion` only in the header | `seq` links audit and session records and exposes gaps; one version per file is enough | A version on every line |
 | DS-D5 | Never append to an older-format file; resume forks it | Files stay single-version and are never rewritten | Mixed-version files |
 | DS-D6 | Write each stream call's response messages before an approval dialog, besides turn end | AC-17 needs tool calls on disk before a dialog crash | Turn end only |
 | DS-D7 | Persist synthetic interrupted results and repair events | The file stays valid for every provider and the transcript shows what happened | Repair in memory at each resume |
 | DS-D8 | From the next turn on, the conversation sent to the model is the stored, redacted records | Live and resumed sessions send identical bytes; pasted secrets never reach the model (G2) | Keep the SDK's raw messages in memory |
 | DS-D9 | `RED` redacts string values of structured records and leaves opaque provider fields alone | JSON stays valid; signatures stay verifiable | Redacting serialised JSON text |
 | DS-D10 | Usage stored with antai's own field names plus a running total | SDK renames do not change the file; the index can be rebuilt from the tail | Storing the SDK `LanguageModelUsage` object |
-| DS-D11 | Keep `index.json` (cache, lock, atomic replace, no `fsync`, reconciliation) | BRD baseline; meets AC-18; answers Q01-23 | Append-only `index.jsonl` (proposal P1) |
+| DS-D11 | Keep `index.json` (cache, lock, atomic replace, no `fsync`, reconciliation) | BRD baseline; meets AC-18 | Append-only `index.jsonl` (P1, section 13) |
 | DS-D12 | One lock helper: `wx` files with pid and host; session locks judged only by pid | Safe failure (fork) on pid reuse; survives laptop sleep | `proper-lockfile` time-stamp heartbeat (stale after 10 s) |
-| DS-D13 | Audit: shared UTC-day file, one `O_APPEND` write per record of at most 8 KB, no lock, tolerant reader | A stale lock must never block the audit log | A lock per append (Codex `history.jsonl`); one file per process |
+| DS-D13 | Audit: shared UTC-day file, one `O_APPEND` write per record of at most 8 KB, no lock, tolerant reader | A stale lock must never block the audit log | A lock per append; one file per process |
 | DS-D14 | Audit record written before the session record | The always-kept record survives a crash between the two | Session first |
 | DS-D15 | Every event also goes to the audit log; audit-only kinds for session start, CLI config and credential changes, deletions and sweeps; `mcp-call` events for every MCP call | The audit answers "what did antai do" without the session file | Approvals and commands only |
 | DS-D16 | OAuth token sets keyed by canonical MCP server URL with the issuer pin; client registrations keyed by issuer | A name-keyed store could send one server's token to another; the MCP spec requires issuer keying | Keyed by server name |
@@ -1334,35 +1340,37 @@ The BRD design stays the baseline wherever it is specified. These items are prop
 | DS-D18 | Atomic replace with `atomically` (7.5 s Windows retry); `fsync` for credentials, trust, fingerprints and MCP files, not for the index | Windows rename failures are transient; the index is rebuildable | `write-file-atomic` without retry; `graceful-fs` |
 | DS-D19 | Windows: profile ACL plus best-effort `icacls` on `~/.antai` at creation | No native code, no start-time cost | Encrypting the file; DPAPI through PowerShell |
 | DS-D20 | `trusted.json` stores both answers, the hash, a hash version and a redacted snapshot | "No" is not asked at every start; a re-ask can show what changed | Hash of trusted folders only |
-| DS-D21 | Drift baselines in `mcp-fingerprints.json`, keyed by server identity, with definitions; baseline replaced only on acceptance | Answers Q01-13; shows diffs; survives SDK upgrades | Baselines inside `mcp.json`; hashes only |
+| DS-D21 | Drift baselines in `mcp-fingerprints.json`, keyed by server identity, with definitions; baseline replaced only on acceptance | Machine state stays out of the user-written `mcp.json`; shows diffs; survives SDK upgrades | Baselines inside `mcp.json`; hashes only |
 | DS-D22 | Retention: background sweep with a sweep lock, double time check, skipped when config is invalid | Never deletes on doubt; never blocks start | Sweep before the prompt; trust the index alone |
 | DS-D23 | Corrupt antai-owned files moved to `.corrupt-<ts>`; bad session headers quarantined | Nothing is overwritten or lost | Overwrite or delete |
 | DS-D24 | Debug log one JSONL file per session, 10 MiB with one rotation; crash reports as separate write-once files | Bounded, greppable, and a crash never depends on an open log | One global log file |
-| DS-D25 | No prompt-history file | Fewer files holding user text | A `history.jsonl` like Codex |
+| DS-D25 | No prompt-history file | Fewer files holding user text | A prompt-history file across sessions |
 | DS-D26 | `antai mcp add/remove` edit MCP files with a comment-preserving JSONC edit and keep `mcp.json.bak` | User comments survive | `JSON.stringify` rewrite |
 | DS-D27 | When the workspace is the home folder, `~/.antai` is loaded once, as global | Avoids reading one file as both trusted global and untrusted project | Loading it twice |
 | DS-D28 | No `fsync` per record; one `fsync` when a session or audit handle closes | `F_FULLFSYNC` cost on macOS; process crashes lose nothing | `fsync` per record or per turn |
-| DS-D29 | Audit write failure denies calls that need an audit record (pending BRD review, P7) | No unaudited actions | Warn and continue |
+| DS-D29 | Audit write failure denies calls that need an audit record (beyond the BRD, P7) | No unaudited actions | Warn and continue |
 
 ---
 
 ## 15. Open questions
 
+No answer is expected soon. Each row's default is what this document uses; nothing here waits on an answer.
+
 | ID | Question | Options | Default assumed | Owner |
 |---|---|---|---|---|
-| Q04-1 | Adopt the append-only `index.jsonl` (P1)? [USER] | Keep `index.json`; `index.jsonl` | Keep `index.json` for v1 | Daksh, BRD review |
-| Q04-2 | Append response messages per step (P2)? [USER] | Per stream call; per step | Per stream call | Daksh, BRD review |
-| Q04-3 | Read retention keys only from global config (P3)? [USER] | Global only; any layer | Global only | Daksh, BRD review |
+| Q04-1 | Adopt the append-only `index.jsonl` (P1)? [USER] | Keep `index.json`; `index.jsonl` | Keep `index.json` for v1 | Daksh |
+| Q04-2 | Append response messages per step (P2)? [USER] | Per stream call; per step | Per stream call | Daksh |
+| Q04-3 | Read retention keys only from global config (P3)? [USER] | Global only; any layer | Global only (now BRD FR-CFG-01) | Daksh |
 | Q04-4 | Secret-path glob `~/.antai/credentials.json*` (P4)? | Glob; exact file plus no copies | Glob | Deliverable 02 |
 | Q04-5 | Tool reads of `~/.antai/sessions`, `audit`, `logs` at least Normal (P5)? [USER] | Normal; Safe inside the workspace | Normal | Daksh, deliverable 02 |
 | Q04-6 | Which `icacls` switch spelling works, and does removing inheritance on `~/.antai` disturb backup or sync tools? | `/inheritance:r`; `/inheritancelevel:r`; skip tightening | `/inheritance:r`, best effort | P0 spike |
-| Q04-7 | Does `process.kill(pid, 0)` report liveness reliably on Windows? | Yes; use another check | Yes (unverified) | P0 spike |
+| Q04-7 | Does `process.kill(pid, 0)` report liveness reliably on Windows? | Yes; use another check | Yes (to be confirmed in the P0 spike) | P0 spike |
 | Q04-8 | Are concurrent single-write `O_APPEND` records of up to 8 KB never interleaved on NTFS, APFS and ext4? | Yes; add a lock | Yes, confirmed by the CI concurrency test | Deliverable 14 |
-| Q04-9 | Deny side-effecting calls when the audit log cannot be written (P7)? [USER] | Deny; warn and continue | Deny | Daksh, BRD review |
+| Q04-9 | Deny side-effecting calls when the audit log cannot be written (P7)? [USER] | Deny; warn and continue | Deny | Daksh |
 | Q04-10 | Keep prompt history for the up arrow across sessions? [USER] | Current session only; a redacted prompt-history file | Current session only | Daksh |
 | Q04-11 | How does config tell `models` aliases from per-model metadata (P8)? | By value type; a separate key | By value type | Deliverables 09 and 11 |
 | Q04-12 | Add an `ANTAI_HOME` override for tests and portable installs? [USER] | No; yes (path guard must follow it) | No | Daksh |
-| Q04-13 | Does `atomically` 2.1.1 create its temp file with the requested mode? | Yes; switch to `write-file-atomic` plus own retry | Verify in P1 | P1 |
+| Q04-13 | Does `atomically` 2.1.1 create its temp file with the requested mode? | Yes; switch to `write-file-atomic` plus own retry | Yes; checked in phase P1 | Phase P1 |
 | Q04-14 | Are MCP tool arguments in the audit log "conversation text" under FR-HIS-13? [USER] | Store redacted, capped at 1,000 characters; store only argument names | Store redacted and capped | Daksh |
 
 ---
@@ -1387,7 +1395,7 @@ The BRD design stays the baseline wherever it is specified. These items are prop
 | FR-SEC-01, FR-SEC-03, FR-SEC-04 | 2.3, 7, 13 (P4, P5) |
 | FR-SEC-05, FR-MOD-04, D20 | 5.5, 11 |
 | FR-MCP-02, FR-MCP-03, FR-MCP-08 | 5.4 |
-| FR-MCP-09, D29, A-S11 | 5.9, 5.14, 10.2 |
+| FR-MCP-09, D29 | 5.9, 5.14, 10.2 |
 | FR-MCP-11, D22 | 5.5, 7.2, 8.3 |
 | FR-CFG-01..05 | 2.1, 5.2, 5.3, 5.6, 13 (P3, P6) |
 | FR-INS-02, FR-PRF-01, FR-SKL-01, 02, 07 | 2.3, 5.16 |
@@ -1406,32 +1414,12 @@ The BRD design stays the baseline wherever it is specified. These items are prop
 | AC-26 | 5.5 |
 | AC-31, AC-34 | 8.1, 8.3 |
 | D7, D11, D30 | 1.3, 1.4, 5.10 |
-| A-C6, A-S5, A-S8 | 5.5, 5.8, 6.6, 7.2 |
-| Q01-13, Q01-16, Q01-23 | 5.14, 13 (P1), 14 |
+| Instructions never stored; keys never in `process.env`; approval signing secret in memory | 5.5, 5.8, 6.6, 7.2 |
+| Drift baselines file, annotation changes, `index.json` kept | 5.14, 13 (P1), 14 |
 | DLV-SW-09, DLV-VER-01, DLV-VER-03 | 3.2, 7.3, 10.2 |
 
 ---
 
 ## 17. Sources
 
-Research notes (checked 12 and 13 October 2026), which carry the full source lists: research B (`ai@7.0.137`, `fingerprintTools`, `@ai-sdk/mcp@2.0.73`), research C (MCP 2026-07-28 authorization, `.mcp.json` conventions), research E (session storage, locks, indexes, retention and config in Codex, Gemini CLI, OpenCode, Claude Code, Goose, Cline), research F (OAuth client provider, atomic replace, appends, locks, permissions, paths).
-
-Primary sources used directly:
-
-- Codex rollout storage, writer lock and session index: https://github.com/openai/codex/tree/f82e36592278a0a782fb0d0fc97e5fa10e832ac2/codex-rs (`rollout`, `state`, `message-history`)
-- Gemini CLI chat recording, retention and trusted folders: https://github.com/google-gemini/gemini-cli/tree/51617c1bcbcb038291125b092501b4342f4e7f77/packages
-- OpenCode 2.x database: https://github.com/anomalyco/opencode/tree/7e858f474d714a4307e7a458b9f08627c1349d02/packages (`core/src/database`, `core/src/session`)
-- Claude Code storage and retention: https://code.claude.com/docs/en/claude-directory , https://code.claude.com/docs/en/sessions , https://code.claude.com/docs/en/authentication
-- Goose sessions: https://goose-docs.ai/docs/guides/logs
-- `atomically` 2.1.1: https://unpkg.com/atomically@2.1.1/readme.md
-- `write-file-atomic` 8.0.0: https://unpkg.com/write-file-atomic@8.0.0/lib/index.js
-- `graceful-fs` 4.2.11: https://unpkg.com/graceful-fs@4.2.11/polyfills.js
-- `proper-lockfile` 4.1.2: https://unpkg.com/proper-lockfile@4.1.2/README.md
-- VS Code rename retry: https://github.com/microsoft/vscode/blob/main/src/vs/base/node/pfs.ts
-- libuv file system (Windows rename, `O_APPEND`; macOS `F_FULLFSYNC`): https://github.com/libuv/libuv/blob/v1.x/src/win/fs.c , https://github.com/libuv/libuv/blob/v1.x/src/unix/fs.c
-- POSIX `write()` and `O_APPEND`: https://pubs.opengroup.org/onlinepubs/9799919799/functions/write.html
-- Node.js `fs` and `os.homedir()`: https://github.com/nodejs/node/blob/v24.x/doc/api/fs.md , https://github.com/nodejs/node/blob/v24.x/doc/api/os.md
-- `icacls`: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
-- `@ai-sdk/mcp` OAuth types: https://unpkg.com/@ai-sdk/mcp@2.0.73/dist/index.d.ts
-- MCP authorization 2026-07-28: https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/docs/specification/2026-07-28/basic/authorization
-- AI SDK tool fingerprinting: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools , https://unpkg.com/ai@7.0.137/dist/index.d.ts
+External facts in this document (package versions, Node and Windows file-system behaviour, MCP authorization rules, AI SDK API names) were checked on 12 October 2026 and are stated where they are used; the P0 spike re-checks the ones the design depends on.
